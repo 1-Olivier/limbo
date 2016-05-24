@@ -36,8 +36,7 @@ uint8_t state;
 
 /* Last ADC cell voltage readout. */
 uint8_t cell_level;
-/* should be 196 for full? */
-#define ADC_CELL_100 170
+#define ADC_CELL_100 211 /* 4.2V theoritical value with 4.7/19.2 divider */
 
 /* 0 = no, 1 = start, 2 = done */
 uint8_t do_power_adc;
