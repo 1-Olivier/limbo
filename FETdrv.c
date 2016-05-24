@@ -27,8 +27,8 @@
 #define NOP __asm__ volatile( "clc" )
 
 uint16_t user_set_level;
-#define USER_LEVEL_MIN 155
-#define USER_LEVEL_MAX 235
+#define USER_LEVEL_MIN 68
+#define USER_LEVEL_MAX 103
 
 uint8_t state;
 #define STATE_RAMP_UP 0
@@ -36,6 +36,7 @@ uint8_t state;
 
 /* Last ADC cell voltage readout. */
 uint8_t cell_level;
+/* should be 196 for full? */
 #define ADC_CELL_100 170
 
 /* 0 = no, 1 = start, 2 = done */
@@ -68,8 +69,10 @@ void charge_gate( uint16_t gate_charge )
 
 void set_output_level()
 {
+	uint8_t cell2 = (cell_level * cell_level) >> 8;
+	uint16_t gate_level = (user_set_level << 8) / cell2;
 	empty_gate();
-	charge_gate( user_set_level - 6u );
+	charge_gate( gate_level - 6u );
 }
 
 /* flash the 7135 channel to say we're running */
@@ -88,7 +91,7 @@ ISR( TIM0_OVF_vect )
 }
 
 /* Watchdog interrupt. */
-uint16_t dog_count;
+uint8_t dog_count;
 ISR( WDT_vect )
 {
 #if 0
@@ -98,6 +101,8 @@ ISR( WDT_vect )
 	uint16_t cycles = ((uint16_t)counter_high << 8) | TCNT0;
 	//charge_gate( (cycles & 0x1fff) - (uint16_t)(6144 + 95) ); 
 #endif
+	// FIXME: Should this be reset after we set output level, just before interrupts get reenabled?
+	// Should be ok... won't have time to overflow before we return from here.
 	TCNT0 = 0;
 	counter_high = 0;
 
@@ -116,6 +121,9 @@ ISR( WDT_vect )
 
 	/* Set new light value. */
 	set_output_level();
+
+	/* Start cell level ADC. */
+	do_power_adc = 1;
 }
 
 int main(void)
@@ -160,6 +168,19 @@ int main(void)
 	}
 #endif
 
+	if( otc_value > 190 )
+	{
+		/* short press */
+	}
+	else if( otc_value > 54 )
+	{
+		/* long press */
+	}
+	else
+	{
+		/* longer time off (not a press) */
+	}
+
 	/* enable watchdog interrupt */
 	WDTCR |= (1 << WDTIE);
 	sei();
@@ -178,8 +199,24 @@ int main(void)
 
 	set_sleep_mode( SLEEP_MODE_PWR_DOWN );
 
+	/*
+		Potential states to handle here:
+		- Ramping up.
+		- Ramping down.
+		- Steady output.
+		- Temperature configuration mode.
+		- Range configuration mode?
+		- Modelist configuration
+
+		They should likely all do Vcc ADC.
+		Perhaps just put it in WDT? Start it at the end, fetch result going in!
+		Problem if we want to power down between interrupts. Perhaps just check
+		do_power_adc and power down when none is running. Won't power down as
+		fast though (one WDT cycle vs one ADC cycle).
+	*/
 	while( 1 == 1 )
 	{
+		// TODO: move this to function
 		if( do_power_adc )
 		{
 			ADCSRA |= (1 << ADEN);
@@ -190,6 +227,7 @@ int main(void)
 			}
 			cell_level = ADCH;
 			ADCSRA &= ~(1 << ADEN);
+			do_power_adc = 0;
 		}
 		/* Sleep until next interrupt. */
 		sleep_mode();
