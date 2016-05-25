@@ -27,15 +27,15 @@
 #define NOP __asm__ volatile( "clc" )
 
 uint16_t user_set_level;
-#define USER_LEVEL_MIN 68
-#define USER_LEVEL_MAX 103
+#define USER_LEVEL_MIN 60
+#define USER_LEVEL_MAX 85
 
 uint8_t state;
 #define STATE_RAMP_UP 0
 #define STATE_STEADY 1
 
 /* Last ADC cell voltage readout. */
-uint8_t cell_level;
+volatile uint8_t cell_level;
 #define ADC_CELL_100 211 /* 4.2V theoritical value with 4.7/19.2 divider */
 
 /* 0 = no, 1 = start, 2 = done */
@@ -68,6 +68,7 @@ void charge_gate( uint16_t gate_charge )
 
 void set_output_level()
 {
+	/* FIXME: Two divides use far less space than a multiply + divide */
 	uint8_t cell2 = (cell_level * cell_level) >> 8;
 	uint16_t gate_level = (user_set_level << 8) / cell2;
 	empty_gate();
@@ -80,6 +81,26 @@ void flash()
 	PORTB |= (1 << PORTB0);
 	_delay_us( 2 );
 	PORTB &= ~(1 << PORTB0);
+}
+
+/* flash an 8-bit value on the 7135 channel */
+void flash_debug( uint8_t value )
+{
+	for( uint8_t i = 0; i < 8; ++i )
+	{
+		PORTB |= (1 << PORTB0);
+		if( value & 1u )
+		{
+			_delay_us( 5 );
+		}
+		else
+		{
+			_delay_us( 1 );
+		}
+		PORTB &= ~(1 << PORTB0);
+		value >>= 1u;
+		_delay_ms( 500 );
+	}
 }
 
 /* Counter overflow interrupt. */
@@ -107,7 +128,7 @@ ISR( WDT_vect )
 
 	if( state == STATE_RAMP_UP )
 	{
-		if( ++dog_count == 2 )
+		if( ++dog_count == 4 )
 		{
 			dog_count = 0;
 			++user_set_level;
@@ -122,6 +143,12 @@ ISR( WDT_vect )
 	set_output_level();
 
 	/* Start cell level ADC. */
+	/*
+		We could reasonably do this every 16th interrupt or more. Or just slow
+		down the WDT. The only point is to save power in low power modes.
+		Perhaps not that relevant as we should already be at roughly 0.1 mA.
+		OTOH, if things work just as well with 1/2 or 1/4 WDT frequency...
+	*/
 	do_power_adc = 1;
 }
 
@@ -156,10 +183,11 @@ int main(void)
 	DDRB |= (1 << DDB3);
 	PORTB |= (1 << PORTB3);
 
-	/* flash the OTC value */
-#if 0
 	/* enable 7135 output (useful for debugging) */
+	/* also to make sure it doesn't produce crap */
 	DDRB |= (1 << DDB0);
+#if 0
+	/* flash the OTC value */
 	for( uint8_t i = 0; i < otc_value; i += 16 )
 	{
 		flash();
@@ -224,7 +252,37 @@ int main(void)
 			while( ADCSRA & (1 << ADSC ) )
 			{
 			}
+#if 0
 			cell_level = ADCH;
+#else
+			/*
+				Filter ADC output to avoid light level flicker. I do this by
+				giving it a bit of wiggle room. It's not that the reading is
+				very noisy but rather that 8 bits are not enough. A change in
+				the LSB causes visible flicker so I'm not certain even the full
+				10 bits would be safe. Besides, getting that requires ADC noise
+				reduction mode. This is simpler but generates fat code.
+
+				TODO: See if this can be put in a function and reused for
+				temperature reading.
+			*/
+			uint8_t read_level = ADCH;
+			uint8_t rp1 = read_level + 1u;
+			uint8_t rm1 = read_level - 1u;
+			uint8_t local_cell_level = cell_level;
+			if( rp1 < local_cell_level )
+				local_cell_level = rp1;
+			if( rm1 > local_cell_level )
+				local_cell_level = rm1;
+			cell_level = local_cell_level;
+#endif
+#if 0
+			/* That range is enough to cause a flicker! */
+			if( cell_level < 164 )
+				cell_level = 164;
+			if( cell_level > 165 )
+				cell_level = 165;
+#endif
 			ADCSRA &= ~(1 << ADEN);
 			do_power_adc = 0;
 		}
