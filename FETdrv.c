@@ -52,6 +52,7 @@ uint8_t state __attribute__ ((section (".noinit")));
 /* Last ADC cell voltage readout. */
 volatile uint8_t cell_level;
 #define ADC_CELL_100 211 /* 4.2V theoritical value with 4.7/19.2 divider */
+#define ADC_CELL_LOWEST 137 /* 3.0V */
 
 /* 0 = no, 1 = start, 2 = done */
 uint8_t do_power_adc;
@@ -86,9 +87,20 @@ void charge_gate( uint16_t gate_charge )
 
 void set_output_level()
 {
-	/* FIXME: Two divides use far less space than a multiply + divide */
-	uint8_t cell2 = (cell_level * cell_level) >> 8;
-	uint16_t gate_level = (user_set_level << 8) / cell2;
+	/*
+		Adjust charge time by dividing by the square of Vcc. This appears to
+		make it fairly stable over the useful range of a cell. I actually use
+		two divide instead of squaring Vcc as this links in less support code
+		and saves a lot of space.
+
+		TODO: Perhaps shift differently to allow greater range of user level.
+		Perhaps right shift cell level by 1 bit?
+	*/
+	uint8_t local_cell_level = cell_level;
+	uint16_t gate_level = (user_set_level << 8);
+	gate_level /= local_cell_level;
+	gate_level <<= 8;
+	gate_level /= local_cell_level;
 	empty_gate();
 	charge_gate( gate_level - 6u );
 }
