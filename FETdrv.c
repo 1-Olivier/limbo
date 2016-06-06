@@ -16,6 +16,17 @@
              ---
 */
 
+/*
+	Potential config options:
+	- memory
+	- initial ramp direction (?)
+	- mode list
+	- limit temp
+
+	Config should be stored separately from state to keep state to 2 bytes.
+	Probably does not need wear leveling as it isn't changed often.
+*/
+
 #define F_CPU 4800000UL
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -26,13 +37,17 @@
 
 #define NOP __asm__ volatile( "clc" )
 
-uint16_t user_set_level;
+/* To check memory decay. */
+uint8_t mem_check __attribute__ ((section (".noinit")));
+
+uint16_t user_set_level __attribute__ ((section (".noinit")));
 #define USER_LEVEL_MIN 60
 #define USER_LEVEL_MAX 85
 
-uint8_t state;
+uint8_t state __attribute__ ((section (".noinit")));
 #define STATE_RAMP_UP 0
 #define STATE_STEADY 1
+#define STATE_RAMP_DOWN 2
 
 /* Last ADC cell voltage readout. */
 volatile uint8_t cell_level;
@@ -40,6 +55,9 @@ volatile uint8_t cell_level;
 
 /* 0 = no, 1 = start, 2 = done */
 uint8_t do_power_adc;
+
+/* current eeprom address for state */
+uint8_t eeprom_state_addr;
 
 void empty_gate()
 {
@@ -103,6 +121,88 @@ void flash_debug( uint8_t value )
 	}
 }
 
+/*
+	TODO: see if the wait, MPE, PE sequence can be moved to a function. I don't
+	remember of the address register is latched or not.
+	TODO: Add interrupt disable in the above sequence, if relevent. Perhaps not
+	as we can read state before interrupts are enabled and write it from within
+	an interrupt.
+		Update: Actually, I don't think we can write from within the WDT
+		interrupt as we'll miss counter interrupts.
+*/
+void save_state_to_eeprom()
+{
+	/* Write current state to next location in eeprom, for wear leveling. */
+	uint8_t eep_addr = eeprom_state_addr;
+	eep_addr += 2;
+	eeprom_state_addr = eep_addr;
+	/* Write first byte. */
+	while( EECR & (1 << EEPE) ) {}
+	EEARL = eep_addr;
+	EECR |= (1 << EEPM1); /* write only */
+	EEDR = state;
+	EECR |= (1 << EEMPE); /* master program enable */
+	EECR |= (1 << EEPE); /* progam enable */
+	/* Write second byte. */
+	while( EECR & (1 << EEPE) ) {}
+	EEARL |= 1;
+	EEDR = user_set_level;
+	EECR |= (1 << EEMPE); /* master program enable */
+	EECR |= (1 << EEPE); /* progam enable */
+	EECR &= ~(1 << EEPM1); /* back to atomic mode */
+
+	/* Clear previous state. */
+	while( EECR & (1 << EEPE) ) {}
+	EEARL = eep_addr - 2;
+	EECR |= (1 << EEPM0); /* erase only */
+	EECR |= (1 << EEMPE); /* master program enable */
+	EECR |= (1 << EEPE); /* progam enable */
+	/* second byte */
+	while( EECR & (1 << EEPE) ) {}
+	EEARL |= 1;
+	EECR |= (1 << EEMPE); /* master program enable */
+	EECR |= (1 << EEPE); /* progam enable */
+	EECR &= ~(1 << EEPM0); /* back to atomic mode */
+
+}
+
+/*
+	We roll our own eeprom access to save some code space. We assume that there
+	are no writes in progress. Loading the state should be the first eeprom
+	operation we do and we should do it only once.
+*/
+void load_state_from_eeprom()
+{
+	uint8_t eep_addr;
+	for( eep_addr = 0; eep_addr < 64; eep_addr += 2 )
+	{
+#if 1
+		EEARL = eep_addr;
+		EECR |= (1 << EERE);
+		uint8_t eep_data = EEDR;
+#else
+		uint8_t eep_data = eeprom_read_byte( (const uint8_t*)(uint16_t)eep_addr );
+#endif
+		if( eep_data != 0xff )
+		{
+			/* read second byte */
+#if 1
+			EEARL |= 1;
+			EECR |= (1 << EERE);
+			uint8_t eep_data2 = EEDR;
+#else
+			uint8_t eep_data2 = eeprom_read_byte( (const uint8_t*)(uint16_t)(eep_addr + 1) );
+#endif
+			/* put in state variables */
+			state = eep_data;
+			user_set_level = eep_data2;
+			/* save address for later state save */
+			eeprom_state_addr = eep_addr;
+			break;
+		}
+	}
+}
+
 /* Counter overflow interrupt. */
 uint8_t counter_high;
 ISR( TIM0_OVF_vect )
@@ -123,16 +223,29 @@ ISR( WDT_vect )
 #endif
 	// FIXME: Should this be reset after we set output level, just before interrupts get reenabled?
 	// Should be ok... won't have time to overflow before we return from here.
+	// FIXME: not true anymore if eeprom writes are in here
 	TCNT0 = 0;
 	counter_high = 0;
 
-	if( state == STATE_RAMP_UP )
+	if( ++dog_count == 4 )
 	{
-		if( ++dog_count == 4 )
+		dog_count = 0;
+		if( state == STATE_RAMP_UP )
 		{
-			dog_count = 0;
 			++user_set_level;
-			if( user_set_level == USER_LEVEL_MAX )
+			if( user_set_level >= USER_LEVEL_MAX )
+			{
+				state = STATE_STEADY;
+			}
+			/* This will do a significant amount of writes. And take a while.
+			   We'll loose counter interrupts. */
+			// TODO: try noinit mem instead?
+			//save_state_to_eeprom();
+		}
+		if( state == STATE_RAMP_DOWN )
+		{
+			--user_set_level;
+			if( user_set_level <= USER_LEVEL_MIN )
 			{
 				state = STATE_STEADY;
 			}
@@ -155,7 +268,6 @@ ISR( WDT_vect )
 int main(void)
 {
 	/* initialize state */
-	user_set_level = USER_LEVEL_MIN;
 	cell_level = ADC_CELL_100; /* assume full until we know better */
 
 	/* drain anything left from before click */
@@ -188,25 +300,74 @@ int main(void)
 	DDRB |= (1 << DDB0);
 #if 0
 	/* flash the OTC value */
-	for( uint8_t i = 0; i < otc_value; i += 16 )
+	for( uint8_t i = 15; i < otc_value; i += 16 )
 	{
 		flash();
 		_delay_ms( 200 );
 	}
 #endif
 
-	if( otc_value > 190 )
+#if 0
+	flash_debug( state );
+	state = 0x55;
+	_delay_ms( 5000 );
+	if( (MCUSR & (1 << BORF)) )
+	{
+		flash();
+	}
+	while( 1 == 1 );
+#endif
+
+	/* read previous state */
+	//load_state_from_eeprom();
+
+#if 0
+	if( state != 0xff )
 	{
 		/* short press */
-	}
-	else if( otc_value > 54 )
-	{
-		/* long press */
+		if( state == STATE_RAMP_UP )
+			state = STATE_STEADY;
+		if( state == STATE_STEADY )
+			state = STATE_RAMP_UP;
 	}
 	else
 	{
-		/* longer time off (not a press) */
+		user_set_level = USER_LEVEL_MIN;
+		state = STATE_RAMP_UP;
 	}
+#endif
+
+	/* Safety. Should be removed eventually. */
+	if( user_set_level >= USER_LEVEL_MAX )
+		user_set_level = USER_LEVEL_MAX;
+
+#if 1
+	if( otc_value > 190 && mem_check == 0x55 )
+	{
+		/* short press */
+		if( state == STATE_RAMP_UP )
+			state = STATE_STEADY;
+		else if( state == STATE_STEADY )
+			state = STATE_RAMP_UP;
+	}
+	else
+	{
+		mem_check = 0x55;
+		//load_state_from_eeprom();
+
+		if( otc_value > 94 )
+		{
+			/* long press */
+			state = STATE_RAMP_DOWN;
+		}
+		else
+		{
+			/* longer time off (not a press) */
+			user_set_level = USER_LEVEL_MIN;
+			state = STATE_RAMP_UP;
+		}
+	}
+#endif
 
 	/* enable watchdog interrupt */
 	WDTCR |= (1 << WDTIE);
