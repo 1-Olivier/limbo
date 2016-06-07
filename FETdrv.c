@@ -134,13 +134,35 @@ void flash_debug( uint8_t value )
 }
 
 /*
+	Helper to write to eeprom.
+*/
+void eeprom_program()
+{
+	/* The two bits for eeprom program need to be set within 4 cycles so we
+	   can't afford an interrupt. */
+	cli();
+	EECR |= (1 << EEMPE); /* master program enable */
+	EECR |= (1 << EEPE); /* progam enable */
+	/* Wait before return so it is then safe to modify the eeprom registers for
+	   the next write. */
+	while( EECR & (1 << EEPE) ) {}
+	/* Enable interrupts again. */
+	sei();
+}
+
+/*
 	TODO: see if the wait, MPE, PE sequence can be moved to a function. I don't
-	remember of the address register is latched or not.
+	remember of the address register is latched or not. Seems not, see FAQ
+	about eeprom address 0 corruption at
+	http://www.atmel.com/webdoc/AVRLibcReferenceManual/FAQ_1faq_eeprom_corruption.html
+
 	TODO: Add interrupt disable in the above sequence, if relevent. Perhaps not
 	as we can read state before interrupts are enabled and write it from within
 	an interrupt.
 		Update: Actually, I don't think we can write from within the WDT
 		interrupt as we'll miss counter interrupts.
+
+	Interrupts are assumed to be enabled when this is called.
 */
 void save_state_to_eeprom()
 {
@@ -149,31 +171,23 @@ void save_state_to_eeprom()
 	eep_addr += 2;
 	eeprom_state_addr = eep_addr;
 	/* Write first byte. */
-	while( EECR & (1 << EEPE) ) {}
 	EEARL = eep_addr;
 	EECR |= (1 << EEPM1); /* write only */
 	EEDR = state;
-	EECR |= (1 << EEMPE); /* master program enable */
-	EECR |= (1 << EEPE); /* progam enable */
+	eeprom_program();
 	/* Write second byte. */
-	while( EECR & (1 << EEPE) ) {}
 	EEARL |= 1;
 	EEDR = user_set_level;
-	EECR |= (1 << EEMPE); /* master program enable */
-	EECR |= (1 << EEPE); /* progam enable */
+	eeprom_program();
 	EECR &= ~(1 << EEPM1); /* back to atomic mode */
 
 	/* Clear previous state. */
-	while( EECR & (1 << EEPE) ) {}
 	EEARL = eep_addr - 2;
 	EECR |= (1 << EEPM0); /* erase only */
-	EECR |= (1 << EEMPE); /* master program enable */
-	EECR |= (1 << EEPE); /* progam enable */
+	eeprom_program();
 	/* second byte */
-	while( EECR & (1 << EEPE) ) {}
 	EEARL |= 1;
-	EECR |= (1 << EEMPE); /* master program enable */
-	EECR |= (1 << EEPE); /* progam enable */
+	eeprom_program();
 	EECR &= ~(1 << EEPM0); /* back to atomic mode */
 
 }
@@ -182,6 +196,8 @@ void save_state_to_eeprom()
 	We roll our own eeprom access to save some code space. We assume that there
 	are no writes in progress. Loading the state should be the first eeprom
 	operation we do and we should do it only once.
+
+	Assumes interruptions are disabled.
 */
 void load_state_from_eeprom()
 {
@@ -249,10 +265,6 @@ ISR( WDT_vect )
 			{
 				state = STATE_STEADY;
 			}
-			/* This will do a significant amount of writes. And take a while.
-			   We'll loose counter interrupts. */
-			// TODO: try noinit mem instead?
-			//save_state_to_eeprom();
 		}
 		if( state == STATE_RAMP_DOWN )
 		{
@@ -357,7 +369,7 @@ int main(void)
 	if( otc_value > 190 && mem_check == 0x55 )
 	{
 		/* short press */
-		if( state == STATE_RAMP_UP )
+		if( state == STATE_RAMP_UP || state == STATE_RAMP_DOWN )
 			state = STATE_STEADY;
 		else if( state == STATE_STEADY )
 			state = STATE_RAMP_UP;
@@ -365,7 +377,7 @@ int main(void)
 	else
 	{
 		mem_check = 0x55;
-		//load_state_from_eeprom();
+		load_state_from_eeprom();
 
 		if( otc_value > 94 )
 		{
@@ -459,7 +471,15 @@ int main(void)
 			ADCSRA &= ~(1 << ADEN);
 			do_power_adc = 0;
 		}
+
 		/* Sleep until next interrupt. */
+		uint8_t prev_state = state;
 		sleep_mode();
+
+		/* If state has changed, save the new one to eeprom. */
+		if( state != prev_state )
+		{
+			save_state_to_eeprom();
+		}
 	}
 }
