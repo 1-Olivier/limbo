@@ -34,6 +34,7 @@
 #include <util/delay.h>
 
 #include "../include/delay_accurate.h"
+#include "../include/division.h"
 
 #define NOP __asm__ volatile( "clc" )
 
@@ -90,18 +91,21 @@ void set_output_level()
 	/*
 		Adjust charge time by dividing by the square of Vcc. This appears to
 		make it fairly stable over the useful range of a cell. I actually use
-		two divide instead of squaring Vcc as this links in less support code
-		and saves a lot of space.
-
-		TODO: Perhaps shift differently to allow greater range of user level.
-		Perhaps right shift cell level by 1 bit?
+		two divide instead of squaring Vcc as this requires less code.
 	*/
 	uint8_t local_cell_level = cell_level;
+#if 0
+	/* This overflows if user level > 255 */
 	uint16_t gate_level = (user_set_level << 8);
 	gate_level /= local_cell_level;
 	gate_level <<= 8;
 	gate_level /= local_cell_level;
+#else
+	uint16_t gate_level = div_u16_u8_sl8( user_set_level, local_cell_level );
+	gate_level = div_u16_u8_sl8( gate_level, local_cell_level );
+#endif
 	empty_gate();
+	// FIXME: could this underflow with invalid (0) user_set_level?
 	charge_gate( gate_level - 6u );
 }
 
