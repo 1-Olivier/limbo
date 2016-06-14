@@ -45,10 +45,15 @@ uint16_t user_set_level __attribute__ ((section (".noinit")));
 #define USER_LEVEL_MIN 60
 #define USER_LEVEL_MAX 85
 
+/*
+	Uses only the high nibble. Important for eeprom read/write as this gets
+	merged with the high byte of the level (of which only the low nibble is
+	used).
+*/
 uint8_t state __attribute__ ((section (".noinit")));
-#define STATE_RAMP_UP 0
-#define STATE_STEADY 1
-#define STATE_RAMP_DOWN 2
+#define STATE_RAMP_UP 0x00
+#define STATE_STEADY 0x10
+#define STATE_RAMP_DOWN 0x20
 
 /* Last ADC cell voltage readout. */
 volatile uint8_t cell_level;
@@ -177,7 +182,7 @@ void save_state_to_eeprom()
 	/* Write first byte. */
 	EEARL = eep_addr;
 	EECR |= (1 << EEPM1); /* write only */
-	EEDR = state;
+	EEDR = state | (user_set_level >> 8);
 	eeprom_program();
 	/* Write second byte. */
 	EEARL |= 1;
@@ -226,8 +231,8 @@ void load_state_from_eeprom()
 			uint8_t eep_data2 = eeprom_read_byte( (const uint8_t*)(uint16_t)(eep_addr + 1) );
 #endif
 			/* put in state variables */
-			state = eep_data;
-			user_set_level = eep_data2;
+			state = eep_data & 0xf0;
+			user_set_level = eep_data2 | ((eep_data & 0x0f) << 8);
 			/* save address for later state save */
 			eeprom_state_addr = eep_addr;
 			break;
