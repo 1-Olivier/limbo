@@ -37,6 +37,7 @@
 #include "../include/division.h"
 
 #define NOP __asm__ volatile( "clc" )
+#define NOP2 __asm__ volatile( "adiw r24,0" )
 
 /* To check memory decay. */
 uint8_t mem_check __attribute__ ((section (".noinit")));
@@ -71,9 +72,7 @@ void empty_gate()
 	/* enable output, off to empty gate  */
 	DDRB |= (1 << DDB1);
 	// TODO: See how many are really needed to flush the gate at high power levels.
-	NOP;
-	NOP;
-	NOP;
+	NOP2;
 	/* that should be more than enough */
 	DDRB &= ~(1 << DDB1);
 }
