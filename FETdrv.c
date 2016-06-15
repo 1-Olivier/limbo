@@ -375,7 +375,7 @@ int main(void)
 		user_set_level = USER_LEVEL_MAX;
 
 #if 1
-	if( otc_value > 190 && mem_check == 0x55 )
+	if( otc_value > 240 && mem_check == 0x55 )
 	{
 		/* short press */
 		if( state == STATE_RAMP_UP || state == STATE_RAMP_DOWN )
@@ -388,7 +388,7 @@ int main(void)
 		mem_check = 0x55;
 		load_state_from_eeprom();
 
-		if( otc_value > 94 )
+		if( otc_value > 180 )
 		{
 			/* long press */
 			state = STATE_RAMP_DOWN;
