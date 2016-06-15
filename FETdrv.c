@@ -64,7 +64,7 @@ volatile uint8_t cell_level;
 uint8_t do_power_adc;
 
 /* current eeprom address for state */
-uint8_t eeprom_state_addr;
+uint8_t eeprom_state_addr __attribute__ ((section (".noinit")));
 
 void empty_gate()
 {
@@ -400,6 +400,10 @@ int main(void)
 			state = STATE_RAMP_UP;
 		}
 	}
+
+	/* Save new state to eeprom. */
+	/* FIXME: Should be in short press if above but it's 4 more words (!) */
+	save_state_to_eeprom();
 #endif
 
 	/* enable watchdog interrupt */
