@@ -44,6 +44,7 @@ uint8_t mem_check __attribute__ ((section (".noinit")));
 
 uint16_t user_set_level __attribute__ ((section (".noinit")));
 #define USER_LEVEL_MIN 120
+/* Max is slightly above 400. */
 #define USER_LEVEL_MAX 200
 
 /*
@@ -120,6 +121,13 @@ void set_output_level()
 	empty_gate();
 	// FIXME: could this underflow with invalid (0) user_set_level?
 	charge_gate( (gate_level >> 1) - 6u );
+#if 0
+	/* Quick hack to make sure max really is max. */
+	if( user_set_level == USER_LEVEL_MAX )
+	{
+		PORTB |= (1 << PORTB1);
+	}
+#endif
 }
 
 /* flash the 7135 channel to say we're running */
@@ -275,6 +283,11 @@ ISR( WDT_vect )
 	if( ++dog_count == 2 )
 	{
 		dog_count = 0;
+		/*
+			TODO: Try a square ramp or some variant. Seems to not ramp fast
+			enough at the high end.
+			ie. user_set_level += 1 + (user_set_level >> 7);
+		*/
 		if( state == STATE_RAMP_UP )
 		{
 			++user_set_level;
