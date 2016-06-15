@@ -70,6 +70,7 @@ void empty_gate()
 {
 	/* enable output, off to empty gate  */
 	DDRB |= (1 << DDB1);
+	// TODO: See how many are really needed to flush the gate at high power levels.
 	NOP;
 	NOP;
 	NOP;
@@ -103,8 +104,8 @@ void set_output_level()
 		by 2 before use and the user levels are made twice as large,
 		accordingly. It helps keep a small granularity to the ramp.
 
-		FIXME: The shift is two words. Could perhaps be avoided by changing the
-		divide op.
+		FIXME: The shift is two words. Could be avoided by changing the delay
+		loop. It could be written with 1 to 3 bit shift built-in.
 	*/
 	uint8_t local_cell_level = cell_level;
 #if 0
@@ -471,6 +472,8 @@ int main(void)
 
 				TODO: See if this can be put in a function and reused for
 				temperature reading.
+				TODO: Use one-way offset if a code word must be saved.
+				TODO: See if this needs to be larger to avoid flicker.
 			*/
 			uint8_t read_level = ADCH;
 			uint8_t rp1 = read_level + 1u;
