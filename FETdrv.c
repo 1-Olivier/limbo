@@ -42,8 +42,8 @@
 uint8_t mem_check __attribute__ ((section (".noinit")));
 
 uint16_t user_set_level __attribute__ ((section (".noinit")));
-#define USER_LEVEL_MIN 60
-#define USER_LEVEL_MAX 85
+#define USER_LEVEL_MIN 120
+#define USER_LEVEL_MAX 200
 
 /*
 	Uses only the high nibble. Important for eeprom read/write as this gets
@@ -97,6 +97,14 @@ void set_output_level()
 		Adjust charge time by dividing by the square of Vcc. This appears to
 		make it fairly stable over the useful range of a cell. I actually use
 		two divide instead of squaring Vcc as this requires less code.
+
+		This adjustment can make the steps of gate_level easily 4 large for a
+		change of one unit in user_set_level. This is why gate_level is divided
+		by 2 before use and the user levels are made twice as large,
+		accordingly. It helps keep a small granularity to the ramp.
+
+		FIXME: The shift is two words. Could perhaps be avoided by changing the
+		divide op.
 	*/
 	uint8_t local_cell_level = cell_level;
 #if 0
@@ -111,7 +119,7 @@ void set_output_level()
 #endif
 	empty_gate();
 	// FIXME: could this underflow with invalid (0) user_set_level?
-	charge_gate( gate_level - 6u );
+	charge_gate( (gate_level >> 1) - 6u );
 }
 
 /* flash the 7135 channel to say we're running */
@@ -264,7 +272,7 @@ ISR( WDT_vect )
 	TCNT0 = 0;
 	counter_high = 0;
 
-	if( ++dog_count == 4 )
+	if( ++dog_count == 2 )
 	{
 		dog_count = 0;
 		if( state == STATE_RAMP_UP )
