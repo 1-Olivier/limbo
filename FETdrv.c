@@ -35,6 +35,7 @@
 
 #include "../include/delay_accurate.h"
 #include "../include/division.h"
+#include "../include/cell_levels.h"
 
 #define NOP __asm__ volatile( "clc" )
 #define NOP2 __asm__ volatile( "adiw r24,0" )
@@ -42,10 +43,17 @@
 /* To check memory decay. */
 uint8_t mem_check __attribute__ ((section (".noinit")));
 
+/* Output level which the user selected. */
 uint16_t user_set_level __attribute__ ((section (".noinit")));
 #define USER_LEVEL_MIN 120
 /* Max is slightly above 400. */
-#define USER_LEVEL_MAX 200
+#define USER_LEVEL_MAX 450
+
+/*
+	Output level we're actually using, after taking into account low voltage
+	protection, temperature control, etc.
+*/
+uint16_t output_level __attribute__ ((section (".noinit")));
 
 /*
 	Uses only the high nibble. Important for eeprom read/write as this gets
@@ -59,8 +67,8 @@ uint8_t state __attribute__ ((section (".noinit")));
 
 /* Last ADC cell voltage readout. */
 volatile uint8_t cell_level;
-#define ADC_CELL_100 211 /* 4.2V theoritical value with 4.7/19.2 divider */
-#define ADC_CELL_LOWEST 137 /* 3.0V */
+#define ADC_CELL_100 ADC8_FROM_CELL_V( 420 )
+#define ADC_CELL_LOWEST ADC8_FROM_CELL_V( 335 )
 
 /* 0 = no, 1 = start, 2 = done */
 uint8_t do_power_adc;
@@ -68,7 +76,7 @@ uint8_t do_power_adc;
 /* current eeprom address for state */
 uint8_t eeprom_state_addr __attribute__ ((section (".noinit")));
 
-void empty_gate()
+static void empty_gate()
 {
 	/* enable output, off to empty gate  */
 	DDRB |= (1 << DDB1);
@@ -78,6 +86,7 @@ void empty_gate()
 	DDRB &= ~(1 << DDB1);
 }
 
+inline static
 void charge_gate( uint16_t gate_charge )
 {
 	/* disable interruptions or counter overflow could add to the delay */
@@ -92,7 +101,8 @@ void charge_gate( uint16_t gate_charge )
 	sei();
 }
 
-void set_output_level()
+inline static
+void apply_output_level()
 {
 	/*
 		Adjust charge time by dividing by the square of Vcc. This appears to
@@ -115,7 +125,7 @@ void set_output_level()
 	gate_level <<= 8;
 	gate_level /= local_cell_level;
 #else
-	uint16_t gate_level = div_u16_u8_sl8( user_set_level, local_cell_level );
+	uint16_t gate_level = div_u16_u8_sl8( output_level, local_cell_level );
 	gate_level = div_u16_u8_sl8( gate_level, local_cell_level );
 #endif
 	empty_gate();
@@ -306,8 +316,45 @@ ISR( WDT_vect )
 		}
 	}
 
+	/*
+		Now figure out the actual output level from the requested level. It
+		will go down if either:
+		- The user requested a lower level.
+		- The cell voltage is too low.
+		- The temperature is too high.
+
+		It will go up if none of the above conditions occur and the user
+		requested a higher level.
+	*/
+	uint16_t local_output_level = output_level;
+	if( cell_level < ADC_CELL_LOWEST ||
+	    user_set_level < local_output_level )
+	{
+		--local_output_level;
+		/*
+			If we reach the lower level, just turn the light off. Our sleep
+			mode is already set to power down and interrupts are already
+			disabled because we're in an interrupt handler. So we just disable
+			the watchdog and go to sleep.
+		*/
+		if( local_output_level < USER_LEVEL_MIN - 10 ) // FIXME: Avoid overshooting user range.
+		{
+			/* enable output, off to empty gate  */
+			DDRB |= (1 << DDB1);
+			/* disable watchdog timer */
+			WDTCR &= ~(1 << WDTIE);
+			/* power down MCU */
+			sleep_mode();
+		}
+	}
+	else if( user_set_level > local_output_level )
+	{
+		++local_output_level;
+	}
+	output_level = local_output_level;
+
 	/* Set new light value. */
-	set_output_level();
+	apply_output_level();
 
 	/* Start cell level ADC. */
 	/*
@@ -421,6 +468,9 @@ int main(void)
 			state = STATE_RAMP_UP;
 		}
 	}
+
+	/* FIXME: too many load/stores here. */
+	output_level = user_set_level;
 
 	/* Save new state to eeprom. */
 	/* FIXME: Should be in short press if above but it's 4 more words (!) */
