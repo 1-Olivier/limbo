@@ -33,6 +33,25 @@
 #include <avr/sleep.h>
 #include <util/delay.h>
 
+/* Fuses */
+#if defined(__AVR_ATtiny13A__)
+/*
+	low fuse:
+	- Enable programming & download.
+	- 4 ms startup delay.
+	- 9.6 MHz clock.
+	high fuse:
+	- Enable Brown-Out Detection at 2.7V.
+*/
+FUSES =
+{
+	.low = FUSE_SPIEN & FUSE_SUT0 & FUSE_CKSEL1,
+	.high = FUSE_BODLEVEL0
+};
+#else
+#error no fuse definitions
+#endif
+
 #include "../include/delay_accurate.h"
 #include "../include/division.h"
 #include "../include/cell_levels.h"

@@ -10,7 +10,7 @@ include $(dir $(lastword $(MAKEFILE_LIST)))Makefile.$(DRIVER).defs
 
 %.hex: %.elf
 	avr-size -C --mcu=$(MCU_NAME) $< && \
-	avr-objcopy -O ihex $< $@
+	avr-objcopy --remove-section=.fuse -O ihex $< $@
 
 build: $(SOURCE:%.c=%.hex)
 
@@ -29,3 +29,10 @@ show_eeprom:
 	avrdude -p $(AVRDUDE_PART) -c usbasp -Ueeprom:r:tmp-eeprom-dump.hex:r && \
 	hexdump -C tmp-eeprom-dump.hex && \
 	rm -f tmp-eeprom-dump.hex
+
+# Note that these won't program the extended fuse byte of attiny25/45/85.
+verify_fuses: $(SOURCE:%.c=%.elf)
+	avrdude -p t13 -c usbasp -Ulfuse:v:$<:e -Uhfuse:v:$<:e
+
+flash_fuses: $(SOURCE:%.c=%.elf)
+	avrdude -p t13 -c usbasp -Ulfuse:w:$<:e -Uhfuse:w:$<:e
