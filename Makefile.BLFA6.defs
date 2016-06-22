@@ -1,0 +1,2 @@
+MCU_NAME := attiny13a
+AVRDUDE_PART := t13

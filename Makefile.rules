@@ -1,0 +1,31 @@
+DRIVER := BLFA6
+
+include $(dir $(lastword $(MAKEFILE_LIST)))Makefile.$(DRIVER).defs
+
+%.elf: %.c
+	avr-gcc -mmcu=$(MCU_NAME) -Os -o $@ -DDRIVER=$(DRIVER) $<
+
+%.s: %.c
+	avr-gcc -mmcu=$(MCU_NAME) -Os -c -S -o $@ -DDRIVER=$(DRIVER) $<
+
+%.hex: %.elf
+	avr-size -C --mcu=$(MCU_NAME) $< && \
+	avr-objcopy -O ihex $< $@
+
+build: $(SOURCE:%.c=%.hex)
+
+asm: $(SOURCE:%.c=%.s)
+
+clean:
+	rm $(SOURCE:%.c=%.elf) $(SOURCE:%.c=%.hex) $(SOURCE:%.c=%.s)
+
+flash: $(SOURCE:%.c=%.hex)
+	avrdude -p $(AVRDUDE_PART) -c usbasp -Uflash:w:$<:i
+
+check_link:
+	avrdude -p $(AVRDUDE_PART) -c usbasp -n
+
+show_eeprom:
+	avrdude -p $(AVRDUDE_PART) -c usbasp -Ueeprom:r:tmp-eeprom-dump.hex:r && \
+	hexdump -C tmp-eeprom-dump.hex && \
+	rm -f tmp-eeprom-dump.hex
