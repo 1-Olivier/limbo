@@ -179,6 +179,7 @@ void apply_output_level()
 }
 
 /* flash the 7135 channel to say we're running */
+static
 void flash()
 {
 	PORTB |= (1 << PORTB0);
@@ -187,6 +188,7 @@ void flash()
 }
 
 /* flash an 8-bit value on the 7135 channel */
+static
 void flash_debug( uint8_t value )
 {
 	for( uint8_t i = 0; i < 8; ++i )
@@ -237,6 +239,7 @@ void eeprom_program()
 
 	Interrupts are assumed to be enabled when this is called.
 */
+static
 void save_state_to_eeprom()
 {
 	/* Write current state to next location in eeprom, for wear leveling. */
@@ -272,6 +275,7 @@ void save_state_to_eeprom()
 
 	Assumes interruptions are disabled.
 */
+static
 void load_state_from_eeprom()
 {
 	uint8_t eep_addr;
