@@ -27,7 +27,12 @@
 	Probably does not need wear leveling as it isn't changed often.
 */
 
-#define F_CPU 4800000UL
+#if defined(__AVR_ATtiny13A__)
+#	define F_CPU 9600000UL
+#else
+#	define F_CPU 8000000UL
+#endif
+
 #include <avr/io.h>
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
@@ -47,6 +52,20 @@ FUSES =
 {
 	.low = FUSE_SPIEN & FUSE_SUT0 & FUSE_CKSEL1,
 	.high = FUSE_BODLEVEL0
+};
+#elif defined(__AVR_ATtiny25__)
+/*
+	low fuse:
+	- 4 ms startup delay.
+	high fuse:
+	- Enable programming & download.
+	- Enable Brown-Out Detection at 2.7V.
+*/
+FUSES =
+{
+	.low = FUSE_SUT0 & FUSE_CKSEL1,
+	.high = FUSE_SPIEN & FUSE_BODLEVEL2 & FUSE_BODLEVEL0,
+	.extended = EFUSE_DEFAULT
 };
 #else
 #error no fuse definitions
@@ -163,7 +182,7 @@ void apply_output_level()
 void flash()
 {
 	PORTB |= (1 << PORTB0);
-	_delay_us( 2 );
+	_delay_us( 1 );
 	PORTB &= ~(1 << PORTB0);
 }
 
@@ -183,7 +202,7 @@ void flash_debug( uint8_t value )
 		}
 		PORTB &= ~(1 << PORTB0);
 		value >>= 1u;
-		_delay_ms( 500 );
+		_delay_ms( 300 );
 	}
 }
 
@@ -423,14 +442,14 @@ int main(void)
 	for( uint8_t i = 15; i < otc_value; i += 16 )
 	{
 		flash();
-		_delay_ms( 200 );
+		_delay_ms( 100 );
 	}
 #endif
 
 #if 0
 	flash_debug( state );
 	state = 0x55;
-	_delay_ms( 5000 );
+	_delay_ms( 2500 );
 	if( (MCUSR & (1 << BORF)) )
 	{
 		flash();
