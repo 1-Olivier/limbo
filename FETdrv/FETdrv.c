@@ -114,6 +114,9 @@ uint8_t do_power_adc;
 /* current eeprom address for state */
 uint8_t eeprom_state_addr __attribute__ ((section (".noinit")));
 
+#define STATS_BUFFER_SIZE 8
+int8_t cell_stats_buffer[STATS_BUFFER_SIZE];
+
 static void empty_gate()
 {
 	/* enable output, off to empty gate  */
@@ -308,6 +311,30 @@ void load_state_from_eeprom()
 	}
 }
 
+/*
+
+	control_value
+		The offset to the limit value. If > 0, we need to lower light output.
+	history_buffer
+		Used to track change of control_value over time.
+
+	RETURNS
+		Max increase to light value. 0 if we can't increase, < 0 is we must
+		decrease.
+*/
+static
+int8_t update_control_stats(
+	int8_t control_value,
+	int8_t *history_buffer )
+{
+	if( control_value > 0 )
+		return -1;
+	else if( control_value == 0 )
+		return 0;
+	else
+		return 1;
+}
+
 /* Counter overflow interrupt. */
 uint8_t counter_high;
 ISR( TIM0_OVF_vect )
@@ -366,32 +393,33 @@ ISR( WDT_vect )
 		- The temperature is too high.
 
 		It will go up if none of the above conditions occur and the user
-		requested a higher level.
+		requested a higher level. In practice, things are a little more
+		complicated to avoid oscillation.
 	*/
+	int8_t max_increase = update_control_stats(
+		ADC_CELL_LOWEST - cell_level, cell_stats_buffer );
+
 	uint16_t local_output_level = output_level;
-	if( cell_level < ADC_CELL_LOWEST ||
-	    user_set_level < local_output_level )
+	local_output_level += max_increase;
+	if( user_set_level < local_output_level )
 	{
-		--local_output_level;
-		/*
-			If we reach the lower level, just turn the light off. Our sleep
-			mode is already set to power down and interrupts are already
-			disabled because we're in an interrupt handler. So we just disable
-			the watchdog and go to sleep.
-		*/
-		if( local_output_level < USER_LEVEL_MIN - 10 ) // FIXME: Avoid overshooting user range.
-		{
-			/* enable output, off to empty gate  */
-			DDRB |= (1 << DDB1);
-			/* disable watchdog timer */
-			WDTCR &= ~(1 << WDTIE);
-			/* power down MCU */
-			sleep_mode();
-		}
+		local_output_level = user_set_level;
 	}
-	else if( user_set_level > local_output_level )
+
+	/*
+		If we reach the lower level, just turn the light off. Our sleep
+		mode is already set to power down and interrupts are already
+		disabled because we're in an interrupt handler. So we just disable
+		the watchdog and go to sleep.
+	*/
+	if( local_output_level < USER_LEVEL_MIN - 10 ) // FIXME: Avoid overshooting user range.
 	{
-		++local_output_level;
+		/* enable output, off to empty gate  */
+		DDRB |= (1 << DDB1);
+		/* disable watchdog timer */
+		WDTCR &= ~(1 << WDTIE);
+		/* power down MCU */
+		sleep_mode();
 	}
 	output_level = local_output_level;
 
