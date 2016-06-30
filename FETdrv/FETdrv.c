@@ -359,29 +359,27 @@ ISR( WDT_vect )
 	TCNT0 = 0;
 	counter_high = 0;
 
-	if( ++dog_count == 2 )
+	/*
+		TODO: Try a square ramp or some variant. Seems to not ramp fast
+		enough at the high end.
+		ie. user_set_level += 1 + (user_set_level >> 7);
+	*/
+	if( state == STATE_RAMP_UP )
+	{
+		++user_set_level;
+		if( user_set_level >= USER_LEVEL_MAX )
+		{
+			state = STATE_STEADY;
+		}
+	}
+	/* Ramp down more slowly than we ramp up. */
+	if( state == STATE_RAMP_DOWN && ++dog_count == 2 )
 	{
 		dog_count = 0;
-		/*
-			TODO: Try a square ramp or some variant. Seems to not ramp fast
-			enough at the high end.
-			ie. user_set_level += 1 + (user_set_level >> 7);
-		*/
-		if( state == STATE_RAMP_UP )
+		--user_set_level;
+		if( user_set_level <= USER_LEVEL_MIN )
 		{
-			++user_set_level;
-			if( user_set_level >= USER_LEVEL_MAX )
-			{
-				state = STATE_STEADY;
-			}
-		}
-		if( state == STATE_RAMP_DOWN )
-		{
-			--user_set_level;
-			if( user_set_level <= USER_LEVEL_MIN )
-			{
-				state = STATE_STEADY;
-			}
+			state = STATE_STEADY;
 		}
 	}
 
