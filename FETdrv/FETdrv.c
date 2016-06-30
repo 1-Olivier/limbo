@@ -50,7 +50,7 @@
 */
 FUSES =
 {
-	.low = FUSE_SPIEN & FUSE_SUT0 & FUSE_CKSEL1,
+	.low = FUSE_SPIEN & FUSE_SUT1 & FUSE_CKSEL1,
 	.high = FUSE_BODLEVEL0
 };
 #elif defined(__AVR_ATtiny25__)
@@ -63,7 +63,7 @@ FUSES =
 */
 FUSES =
 {
-	.low = FUSE_SUT0 & FUSE_CKSEL1,
+	.low = FUSE_SUT1 & FUSE_CKSEL1,
 	.high = FUSE_SPIEN & FUSE_BODLEVEL2 & FUSE_BODLEVEL0,
 	.extended = EFUSE_DEFAULT
 };
