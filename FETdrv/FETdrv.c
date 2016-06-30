@@ -108,7 +108,7 @@ volatile uint8_t cell_level;
 #define ADC_CELL_100 ADC8_FROM_CELL_V( 420 )
 #define ADC_CELL_LOWEST ADC8_FROM_CELL_V( 335 )
 
-/* 0 = no, 1 = start, 2 = done */
+/* 0 = no, 1 = start */
 uint8_t do_power_adc;
 
 /* current eeprom address for state */
@@ -214,6 +214,7 @@ void flash_debug( uint8_t value )
 /*
 	Helper to write to eeprom.
 */
+static
 void eeprom_program()
 {
 	/* The two bits for eeprom program need to be set within 4 cycles so we
@@ -487,24 +488,6 @@ int main(void)
 	while( 1 == 1 );
 #endif
 
-	/* read previous state */
-	//load_state_from_eeprom();
-
-#if 0
-	if( state != 0xff )
-	{
-		/* short press */
-		if( state == STATE_RAMP_UP )
-			state = STATE_STEADY;
-		if( state == STATE_STEADY )
-			state = STATE_RAMP_UP;
-	}
-	else
-	{
-		user_set_level = USER_LEVEL_MIN;
-		state = STATE_RAMP_UP;
-	}
-#endif
 
 	/* Safety. Should be removed eventually. */
 	if( user_set_level >= USER_LEVEL_MAX )
