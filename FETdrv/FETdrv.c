@@ -538,10 +538,6 @@ int main(void)
 
 	/* FIXME: too many load/stores here. */
 	output_level = user_set_level;
-
-	/* Save new state to eeprom. */
-	/* FIXME: Should be in short press if above but it's 4 more words (!) */
-	save_state_to_eeprom();
 #endif
 
 	/* enable watchdog interrupt */
@@ -626,13 +622,6 @@ int main(void)
 		}
 
 		/* Sleep until next interrupt. */
-		uint8_t prev_state = state;
 		sleep_mode();
-
-		/* If state has changed, save the new one to eeprom. */
-		if( state != prev_state )
-		{
-			save_state_to_eeprom();
-		}
 	}
 }
