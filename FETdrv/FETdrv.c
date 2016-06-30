@@ -44,9 +44,9 @@
 	low fuse:
 	- Enable programming & download.
 	- 4 ms startup delay.
-	- 9.6 MHz clock.
+	- 4.8 MHz clock.
 	high fuse:
-	- Enable Brown-Out Detection at 2.7V.
+	- Enable Brown-Out Detection at 1.8V.
 */
 FUSES =
 {
@@ -57,14 +57,15 @@ FUSES =
 /*
 	low fuse:
 	- 4 ms startup delay.
+	- 8 MHz clock
 	high fuse:
 	- Enable programming & download.
-	- Enable Brown-Out Detection at 2.7V.
+	- Enable Brown-Out Detection at 1.8V.
 */
 FUSES =
 {
-	.low = FUSE_SUT1 & FUSE_CKSEL1,
-	.high = FUSE_SPIEN & FUSE_BODLEVEL2 & FUSE_BODLEVEL0,
+	.low = FUSE_SUT1 & FUSE_CKSEL3 & FUSE_CKSEL2 & FUSE_CKSEL0,
+	.high = FUSE_SPIEN & FUSE_BODLEVEL0,
 	.extended = EFUSE_DEFAULT
 };
 #else
