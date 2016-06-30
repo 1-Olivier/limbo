@@ -81,6 +81,12 @@ FUSES =
 /* To check memory decay. */
 uint8_t mem_check __attribute__ ((section (".noinit")));
 
+/* Number of clicks without significant delay between them. */
+uint8_t click_count __attribute__ ((section (".noinit")));
+
+/* WDT interrupt counter since boot. */
+uint8_t wdt_count;
+
 /* Output level which the user selected. */
 uint16_t user_set_level __attribute__ ((section (".noinit")));
 #define USER_LEVEL_MIN 120
@@ -347,6 +353,12 @@ ISR( TIM0_OVF_vect )
 uint8_t dog_count;
 ISR( WDT_vect )
 {
+	++wdt_count;
+
+	/* Reset click count after 320 ms */
+	if( wdt_count == 20 )
+		click_count = 0;
+
 #if 0
 	charge_gate( ((uint16_t)(TCNT0 + (uint8_t)10) >> 0) + (uint16_t)150 );
 #else
@@ -494,30 +506,34 @@ int main(void)
 		user_set_level = USER_LEVEL_MAX;
 
 #if 1
-	if( otc_value > 240 && mem_check == 0x55 )
+	if( mem_check == 0x55 )
 	{
 		/* short press */
-		if( state == STATE_RAMP_UP || state == STATE_RAMP_DOWN )
-			state = STATE_STEADY;
-		else if( state == STATE_STEADY )
-			state = STATE_RAMP_UP;
-	}
-	else
-	{
-		mem_check = 0x55;
-		load_state_from_eeprom();
+		++click_count;
 
-		if( otc_value > 180 )
+		if( click_count == 1 )
 		{
-			/* long press */
+			if( state == STATE_RAMP_UP || state == STATE_RAMP_DOWN )
+				state = STATE_STEADY;
+			else if( state == STATE_STEADY )
+				state = STATE_RAMP_UP;
+		}
+		else if( click_count == 2 )
+		{
 			state = STATE_RAMP_DOWN;
 		}
 		else
 		{
-			/* longer time off (not a press) */
-			user_set_level = USER_LEVEL_MIN;
-			state = STATE_RAMP_UP;
+			state = STATE_STEADY;
 		}
+	}
+	else
+	{
+		/* cold start */
+		mem_check = 0x55;
+		user_set_level = USER_LEVEL_MIN;
+		state = STATE_RAMP_UP;
+		click_count = 0;
 	}
 
 	/* FIXME: too many load/stores here. */
