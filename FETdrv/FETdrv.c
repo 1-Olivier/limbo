@@ -34,6 +34,7 @@
 #endif
 
 #include <avr/io.h>
+#include <avr/eeprom.h>
 #include <avr/interrupt.h>
 #include <avr/sleep.h>
 #include <util/delay.h>
@@ -93,6 +94,8 @@ uint16_t user_set_level __attribute__ ((section (".noinit")));
 #define USER_LEVEL_MIN 120
 /* Max is slightly above 400. */
 #define USER_LEVEL_MAX 450
+/* Level above which temperature control is enabled. */
+#define TEMPERATURE_THRESHOLD_LEVEL 180
 
 /*
 	Output level we're actually using, after taking into account low voltage
@@ -109,11 +112,12 @@ uint8_t state __attribute__ ((section (".noinit")));
 #define STATE_RAMP_UP 0x00
 #define STATE_STEADY 0x10
 #define STATE_RAMP_DOWN 0x20
+#define STATE_THERMAL_CONFIG 0x40
 
 /* Last ADC cell voltage readout. */
 volatile uint8_t cell_level;
 #define ADC_CELL_100 ADC8_FROM_CELL_V( 420 )
-#define ADC_CELL_LOWEST ADC8_FROM_CELL_V( 335 )
+#define ADC_CELL_LOWEST ADC8_FROM_CELL_V( 300 )
 
 /* 0 = no, 1 = start */
 uint8_t do_power_adc;
@@ -121,8 +125,11 @@ uint8_t do_power_adc;
 /* current eeprom address for state */
 uint8_t eeprom_state_addr __attribute__ ((section (".noinit")));
 
-#define STATS_BUFFER_SIZE 8
+#define STATS_BUFFER_SIZE 2
 int8_t cell_stats_buffer[STATS_BUFFER_SIZE];
+int8_t temp_stats_buffer[STATS_BUFFER_SIZE];
+
+volatile uint8_t temp_limit __attribute__ ((section (".noinit")));
 
 static void empty_gate()
 {
@@ -360,18 +367,17 @@ ISR( WDT_vect )
 	if( wdt_count == 20 )
 		click_count = 0;
 
-#if 0
-	charge_gate( ((uint16_t)(TCNT0 + (uint8_t)10) >> 0) + (uint16_t)150 );
-#else
-	// This should be about 9600
-	uint16_t cycles = ((uint16_t)counter_high << 8) | TCNT0;
-	//charge_gate( (cycles & 0x1fff) - (uint16_t)(6144 + 95) ); 
-#endif
-	// FIXME: Should this be reset after we set output level, just before interrupts get reenabled?
-	// Should be ok... won't have time to overflow before we return from here.
-	// FIXME: not true anymore if eeprom writes are in here
+	uint8_t temperature = (((uint16_t)counter_high << 8) | TCNT0) >> 1;
+	/*
+		It's ok to reset this right now because charge_gate() won't take long
+		enough for TCNT0 to overflow.
+	*/
 	TCNT0 = 0;
 	counter_high = 0;
+	if( state == STATE_THERMAL_CONFIG )
+	{
+		temp_limit = temperature;
+	}
 
 	/*
 		TODO: Try a square ramp or some variant. Seems to not ramp fast
@@ -412,6 +418,26 @@ ISR( WDT_vect )
 		ADC_CELL_LOWEST - cell_level, cell_stats_buffer );
 
 	uint16_t local_output_level = output_level;
+
+	/*
+		If output level is high enough that we entered idle mode last time
+		around, use the temperature readout.
+
+		Note that this conveniently ignores the reading of the first interrupt
+		which is likely incorrect. Output level will still be very low then.
+		We'll need to do this explicitly if there's ever a way to start at
+		higher output.
+	*/
+	if( local_output_level >= TEMPERATURE_THRESHOLD_LEVEL &&
+	    state != STATE_THERMAL_CONFIG )
+	{
+		int8_t temp_max_increase = update_control_stats(
+			temperature - temp_limit, temp_stats_buffer );
+
+		if( temp_max_increase < max_increase )
+			max_increase = temp_max_increase;
+	}
+
 	local_output_level += max_increase;
 	if( user_set_level < local_output_level )
 	{
@@ -433,6 +459,30 @@ ISR( WDT_vect )
 		/* power down MCU */
 		sleep_mode();
 	}
+
+	/*
+		At higher power levels, temperature control is enabled and we can only
+		enter idle mode here because clk I/O must remain active to count
+		cycles.
+
+		At lower levels, we don't bother with the temperature so we can power
+		down the MCU which could otherwise use more power than the light
+		itself. This mode setting is also important to the low voltage
+		protection's final shutdown of the light.
+
+		TODO: optimize this. It probably wastes an insane amount of code
+		space.
+	*/
+	if( local_output_level >= TEMPERATURE_THRESHOLD_LEVEL )
+	{
+		set_sleep_mode( SLEEP_MODE_IDLE );
+	}
+	else
+	{
+		set_sleep_mode( SLEEP_MODE_PWR_DOWN );
+	}
+
+	/* Write back to memory. */
 	output_level = local_output_level;
 
 	/* Set new light value. */
@@ -518,6 +568,11 @@ int main(void)
 				state = STATE_STEADY;
 			else if( state == STATE_STEADY )
 				state = STATE_RAMP_UP;
+			else if( state == STATE_THERMAL_CONFIG )
+			{
+				/* store current temperature as limit in eeprom */
+				eeprom_write_byte( (uint8_t*)0, temp_limit );
+			}
 		}
 		else if( click_count == 2 )
 		{
@@ -526,6 +581,12 @@ int main(void)
 		else
 		{
 			state = STATE_STEADY;
+
+			if( click_count > 10 )
+			{
+				state = STATE_THERMAL_CONFIG;
+				user_set_level = USER_LEVEL_MAX;
+			}
 		}
 	}
 	else
@@ -535,6 +596,8 @@ int main(void)
 		user_set_level = USER_LEVEL_MIN;
 		state = STATE_RAMP_UP;
 		click_count = 0;
+		/* read some config from eeprom */
+		temp_limit = eeprom_read_byte( (uint8_t*)0 );
 	}
 
 	/* FIXME: too many load/stores here. */
@@ -548,16 +611,19 @@ int main(void)
 	//empty_gate();
 	//flash();
 
-	/* start counter with clk */
+	/*
+		start counter with clk / 64
+		The frequency is so that the count between two watchdog interrupts fits
+		in 16 bits, with room to spare. Yet it must be high enough that there
+		is enough resolution to detect the desired changes.
+	*/
 	//TCCR0B = (1 << CS00); // clk
-	TCCR0B = (1 << CS01); // clk / 8 (appears to work when used directly)
-	//TCCR0B = (1 << CS01) | (1 << CS00); // clk/64
+	//TCCR0B = (1 << CS01); // clk / 8 (appears to work when used directly)
+	TCCR0B = (1 << CS01) | (1 << CS00); // clk/64
 	//TCCR0B = (1 << CS02); // clk / 256
 
 	/* enable counter overflow interrupt */
 	TIMSK0 |= (1 << TOIE0);
-
-	set_sleep_mode( SLEEP_MODE_PWR_DOWN );
 
 	/*
 		Potential states to handle here:
