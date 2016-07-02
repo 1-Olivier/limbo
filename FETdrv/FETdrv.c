@@ -179,9 +179,9 @@ void apply_output_level()
 	empty_gate();
 	// FIXME: could this underflow with invalid (0) user_set_level?
 	charge_gate( (gate_level >> 1) - 6u );
-#if 0
+#if 1
 	/* Quick hack to make sure max really is max. */
-	if( user_set_level == USER_LEVEL_MAX )
+	if( output_level == USER_LEVEL_MAX )
 	{
 		PORTB |= (1 << PORTB1);
 	}
