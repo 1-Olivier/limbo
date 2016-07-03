@@ -126,7 +126,6 @@ uint8_t do_power_adc;
 uint8_t eeprom_state_addr __attribute__ ((section (".noinit")));
 
 #define STATS_BUFFER_SIZE 2
-int8_t cell_stats_buffer[STATS_BUFFER_SIZE];
 int8_t temp_stats_buffer[STATS_BUFFER_SIZE];
 
 volatile uint8_t temp_limit __attribute__ ((section (".noinit")));
@@ -411,11 +410,13 @@ ISR( WDT_vect )
 		- The temperature is too high.
 
 		It will go up if none of the above conditions occur and the user
-		requested a higher level. In practice, things are a little more
-		complicated to avoid oscillation.
+		requested a higher level.
+
+		This fairly primitive control for low voltage protection works well
+		enough because the cell responds quickly and we use a window around
+		the ADC readout. This is enough to prevent oscillation.
 	*/
-	int8_t max_increase = update_control_stats(
-		ADC_CELL_LOWEST - cell_level, cell_stats_buffer );
+	int8_t max_increase = cell_level - ADC_CELL_LOWEST;
 
 	uint16_t local_output_level = output_level;
 
