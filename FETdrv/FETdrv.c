@@ -77,9 +77,6 @@ FUSES =
 #include "../include/division.h"
 #include "../include/cell_levels.h"
 
-#define NOP __asm__ volatile( "clc" )
-#define NOP2 __asm__ volatile( "adiw r24,0" )
-
 /* To check memory decay. */
 uint8_t mem_check __attribute__ ((section (".noinit")));
 

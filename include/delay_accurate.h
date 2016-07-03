@@ -25,4 +25,10 @@ inline static void delay_cycles( uint16_t __cycles )
 	);
 }
 
+/* Single cycle NOP. */
+#define NOP __asm__ volatile( "clc" )
+
+/* Two cycle NOP. */
+#define NOP2 __asm__ volatile( "adiw r24,0" )
+
 #endif
