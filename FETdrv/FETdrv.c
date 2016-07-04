@@ -660,6 +660,18 @@ int main(void)
 				10 bits would be safe. Besides, getting that requires ADC noise
 				reduction mode. This is simpler but generates fat code.
 
+				When the reading is going lower, I only allow decrementing by
+				one unit (per watchdog interrupt). This is still much faster
+				than a cell can possibly drain itself (1 V/s). The reason is
+				that when the power is cut (the switch it pressed), the MCU
+				will keep running a little off the capacitor and read a value
+				here which is much lower than the cell actually is. This messes
+				with LVP code, causing the output to be dropped quickly and
+				thus the click to appear to change output level. This is most
+				visible at very low levels. This also appears to be the source
+				of bright flashes on clicks, probably because of the voltage
+				compensation when the output level is applied.
+
 				TODO: See if this can be put in a function and reused for
 				temperature reading.
 				TODO: Use one-way offset if a code word must be saved.
@@ -670,7 +682,7 @@ int main(void)
 			uint8_t rm1 = read_level - 1u;
 			uint8_t local_cell_level = cell_level;
 			if( rp1 < local_cell_level )
-				local_cell_level = rp1;
+				--local_cell_level;
 			if( rm1 > local_cell_level )
 				local_cell_level = rm1;
 			cell_level = local_cell_level;
