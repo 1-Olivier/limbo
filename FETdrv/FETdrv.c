@@ -120,9 +120,9 @@ volatile uint8_t cell_level;
 uint8_t do_power_adc;
 
 /* current eeprom address for state */
-uint8_t eeprom_state_addr __attribute__ ((section (".noinit")));
+//uint8_t eeprom_state_addr __attribute__ ((section (".noinit")));
 
-#define STATS_BUFFER_SIZE 2
+#define STATS_BUFFER_SIZE 1
 int8_t temp_stats_buffer[STATS_BUFFER_SIZE];
 
 volatile uint8_t temp_limit __attribute__ ((section (".noinit")));
@@ -239,6 +239,7 @@ void eeprom_program()
 	sei();
 }
 
+#if 0
 /*
 	TODO: see if the wait, MPE, PE sequence can be moved to a function. I don't
 	remember of the address register is latched or not. Seems not, see FAQ
@@ -321,8 +322,11 @@ void load_state_from_eeprom()
 		}
 	}
 }
+#endif
 
 /*
+	This updates statistics and history about a variable used to limit the
+	light output and makes a decision based on that data.
 
 	control_value
 		The offset to the limit value. If > 0, we need to lower light output.
