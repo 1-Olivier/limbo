@@ -553,6 +553,8 @@ int main(void)
 	while( 1 == 1 );
 #endif
 
+	/* Click starts from the actual output level (limited by temp or Vcc). */
+	user_set_level = output_level;
 
 	/* Safety. Should be removed eventually. */
 	if( user_set_level >= USER_LEVEL_MAX )
