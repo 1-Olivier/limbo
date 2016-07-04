@@ -23,6 +23,6 @@
 /*
 	8-bit ADC value from voltage, as a 3 digit value (ie. 385 for 3.85V).
 */
-#define ADC8_FROM_CELL_V( vcc ) (uint8_t)((uint32_t)(vcc) * VCC_DIV_R1 * 255ul / (110ul * (VCC_DIV_R1 + VCC_DIV_R2)))
+#define ADC8_FROM_CELL_V( vcc ) ((uint8_t)((uint32_t)(vcc) * VCC_DIV_R1 * 255ul / (110ul * (VCC_DIV_R1 + VCC_DIV_R2))))
 
 #endif
