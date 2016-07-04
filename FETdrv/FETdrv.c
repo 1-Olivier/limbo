@@ -153,7 +153,7 @@ void charge_gate( uint16_t gate_charge )
 }
 
 inline static
-void apply_output_level()
+void apply_output_level( uint16_t level )
 {
 	/*
 		Adjust charge time by dividing by the square of Vcc. This appears to
@@ -176,7 +176,7 @@ void apply_output_level()
 	gate_level <<= 8;
 	gate_level /= local_cell_level;
 #else
-	uint16_t gate_level = div_u16_u8_sl8( output_level, local_cell_level );
+	uint16_t gate_level = div_u16_u8_sl8( level, local_cell_level );
 	gate_level = div_u16_u8_sl8( gate_level, local_cell_level );
 #endif
 	empty_gate();
@@ -184,7 +184,7 @@ void apply_output_level()
 	charge_gate( (gate_level >> 1) - 6u );
 #if 1
 	/* Quick hack to make sure max really is max. */
-	if( output_level == USER_LEVEL_MAX )
+	if( level == USER_LEVEL_MAX )
 	{
 		PORTB |= (1 << PORTB1);
 	}
@@ -462,6 +462,9 @@ ISR( WDT_vect )
 		sleep_mode();
 	}
 
+	/* Write back to memory. */
+	output_level = local_output_level;
+
 	/*
 		At higher power levels, temperature control is enabled and we can only
 		enter idle mode here because clk I/O must remain active to count
@@ -484,11 +487,8 @@ ISR( WDT_vect )
 		set_sleep_mode( SLEEP_MODE_PWR_DOWN );
 	}
 
-	/* Write back to memory. */
-	output_level = local_output_level;
-
 	/* Set new light value. */
-	apply_output_level();
+	apply_output_level( local_output_level );
 
 	/* Start cell level ADC. */
 	/*
