@@ -342,12 +342,36 @@ int8_t update_control_stats(
 	int8_t control_value,
 	int8_t *history_buffer )
 {
-	if( control_value > 0 )
-		return -1;
-	else if( control_value == 0 )
+	if( control_value == 0 )
 		return 0;
+
+	uint8_t interrupt_count = history_buffer[0] - 1;
+	int8_t step = -1;
+
+	if( control_value < 0 )
+	{
+		control_value = -control_value;
+		step = 1;
+	}
+
+	uint8_t min_count = 0x1f;
+	while( --control_value )
+	{
+		if( min_count == 0 )
+			return step << 2;
+
+		min_count >>= 1;
+	}
+
+	if( min_count < interrupt_count )
+		interrupt_count = min_count;
+
+	history_buffer[0] = interrupt_count;
+
+	if( interrupt_count == 0 )
+		return step;
 	else
-		return 1;
+		return 0;
 }
 
 /* Counter overflow interrupt. */
@@ -430,6 +454,7 @@ ISR( WDT_vect )
 		We'll need to do this explicitly if there's ever a way to start at
 		higher output.
 	*/
+#if 1
 	if( local_output_level >= TEMPERATURE_THRESHOLD_LEVEL &&
 	    state != STATE_THERMAL_CONFIG )
 	{
@@ -439,6 +464,7 @@ ISR( WDT_vect )
 		if( temp_max_increase < max_increase )
 			max_increase = temp_max_increase;
 	}
+#endif
 
 	local_output_level += max_increase;
 	if( user_set_level < local_output_level )
