@@ -91,7 +91,7 @@ uint16_t user_set_level __attribute__ ((section (".noinit")));
 #define USER_LEVEL_MIN 120
 /* Max is slightly above 400. */
 #define USER_LEVEL_MAX 450
-/* Level above which temperature control is enabled. */
+/* Level above which temperature control is enabled. Undefine to disable. */
 #define TEMPERATURE_THRESHOLD_LEVEL 180
 
 /*
@@ -454,7 +454,7 @@ ISR( WDT_vect )
 		We'll need to do this explicitly if there's ever a way to start at
 		higher output.
 	*/
-#if 1
+#ifdef TEMPERATURE_THRESHOLD_LEVEL
 	if( local_output_level >= TEMPERATURE_THRESHOLD_LEVEL &&
 	    state != STATE_THERMAL_CONFIG )
 	{
@@ -504,11 +504,13 @@ ISR( WDT_vect )
 		TODO: optimize this. It probably wastes an insane amount of code
 		space.
 	*/
+#ifdef TEMPERATURE_THRESHOLD_LEVEL
 	if( local_output_level >= TEMPERATURE_THRESHOLD_LEVEL )
 	{
 		set_sleep_mode( SLEEP_MODE_IDLE );
 	}
 	else
+#endif
 	{
 		set_sleep_mode( SLEEP_MODE_PWR_DOWN );
 	}
