@@ -528,8 +528,13 @@ ISR( WDT_vect )
 
 int main(void)
 {
-	/* initialize state */
-	cell_level = ADC_CELL_100; /* assume full until we know better */
+	/*
+		Assume largest possible value until we know better. This means the
+		light will be less bright than it should be for the first WDT cycle,
+		which is less visible than being too bright.
+	*/
+#define CELL_INIT_VALUE (ADC_CELL_LOWEST < 128 ? ADC_CELL_LOWEST + 127 : 255)
+	cell_level = CELL_INIT_VALUE;
 
 	/* drain anything left from before click */
 	empty_gate();
@@ -704,8 +709,11 @@ int main(void)
 				of bright flashes on clicks, probably because of the voltage
 				compensation when the output level is applied.
 
-				TODO: See if this can be put in a function and reused for
-				temperature reading.
+				The one exception to this rule is on startup where we want to
+				use the first reading directly.
+
+				This whole thing uses up 30 bytes :(
+
 				TODO: Use one-way offset if a code word must be saved.
 				TODO: See if this needs to be larger to avoid flicker.
 			*/
@@ -713,18 +721,13 @@ int main(void)
 			uint8_t rp1 = read_level + 1u;
 			uint8_t rm1 = read_level - 1u;
 			uint8_t local_cell_level = cell_level;
+			if( local_cell_level == CELL_INIT_VALUE )
+				local_cell_level = rp1;
 			if( rp1 < local_cell_level )
 				--local_cell_level;
 			if( rm1 > local_cell_level )
 				local_cell_level = rm1;
 			cell_level = local_cell_level;
-#endif
-#if 0
-			/* That range is enough to cause a flicker! */
-			if( cell_level < 164 )
-				cell_level = 164;
-			if( cell_level > 165 )
-				cell_level = 165;
 #endif
 			ADCSRA &= ~(1 << ADEN);
 			do_power_adc = 0;
