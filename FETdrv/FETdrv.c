@@ -122,9 +122,6 @@ uint8_t do_power_adc;
 /* current eeprom address for state */
 //uint8_t eeprom_state_addr __attribute__ ((section (".noinit")));
 
-#define STATS_BUFFER_SIZE 1
-int8_t temp_stats_buffer[STATS_BUFFER_SIZE];
-
 volatile uint8_t g_temperature_limit __attribute__ ((section (".noinit")));
 volatile uint8_t g_current_temperature __attribute__ ((section (".noinit")));
 #define TEMP_TABLE_SIZE 7
@@ -472,7 +469,6 @@ ISR( WDT_vect )
 	if( local_output_level >= TEMPERATURE_THRESHOLD_LEVEL &&
 	    state != STATE_THERMAL_CONFIG )
 	{
-#if 1
 		int8_t temp_offset = current_temp - g_temperature_limit;
 		if( temp_offset > 0 )
 		{
@@ -480,13 +476,6 @@ ISR( WDT_vect )
 			if( temp_table_index > (TEMP_TABLE_SIZE - 1) )
 				temp_table_index = TEMP_TABLE_SIZE - 1;
 		}
-#else
-		int8_t temp_max_increase = update_control_stats(
-			current_temp - g_temperature_limit, temp_stats_buffer );
-
-		if( temp_max_increase < max_increase )
-			max_increase = temp_max_increase;
-#endif
 	}
 #endif
 
