@@ -125,7 +125,13 @@ uint8_t do_power_adc;
 #define STATS_BUFFER_SIZE 1
 int8_t temp_stats_buffer[STATS_BUFFER_SIZE];
 
-volatile uint8_t temp_limit __attribute__ ((section (".noinit")));
+volatile uint8_t g_temperature_limit __attribute__ ((section (".noinit")));
+volatile uint8_t g_current_temperature __attribute__ ((section (".noinit")));
+#define TEMP_TABLE_SIZE 7
+static const uint8_t g_temp_table[TEMP_TABLE_SIZE] =
+{
+	0, 20, 45, 80, 125, 175, 225
+};
 
 static void empty_gate()
 {
@@ -394,14 +400,21 @@ ISR( WDT_vect )
 	uint8_t temperature = (((uint16_t)counter_high << 8) | TCNT0) >> 1;
 	/*
 		It's ok to reset this right now because charge_gate() won't take long
-		enough for TCNT0 to overflow.
+		enough for TCNT0 to overflow. It's also better to do it close to the
+		start of the interrupt handler as that's what the watchdog timer
+		measures.
 	*/
 	TCNT0 = 0;
 	counter_high = 0;
-	if( state == STATE_THERMAL_CONFIG )
-	{
-		temp_limit = temperature;
-	}
+
+	/* Update current temp with a small window as this is a noisy. */
+	uint8_t current_temp = g_current_temperature;
+	int8_t d_temp = temperature - current_temp;
+	if( d_temp > 1 )
+		++current_temp;
+	if( d_temp < -1 )
+		--current_temp;
+	g_current_temperature = current_temp;
 
 	/*
 		TODO: Try a square ramp or some variant. Seems to not ramp fast
@@ -455,14 +468,25 @@ ISR( WDT_vect )
 		higher output.
 	*/
 #ifdef TEMPERATURE_THRESHOLD_LEVEL
+	uint8_t temp_table_index = 0;
 	if( local_output_level >= TEMPERATURE_THRESHOLD_LEVEL &&
 	    state != STATE_THERMAL_CONFIG )
 	{
+#if 1
+		int8_t temp_offset = current_temp - g_temperature_limit;
+		if( temp_offset > 0 )
+		{
+			temp_table_index = temp_offset;
+			if( temp_table_index > (TEMP_TABLE_SIZE - 1) )
+				temp_table_index = TEMP_TABLE_SIZE - 1;
+		}
+#else
 		int8_t temp_max_increase = update_control_stats(
-			temperature - temp_limit, temp_stats_buffer );
+			current_temp - g_temperature_limit, temp_stats_buffer );
 
 		if( temp_max_increase < max_increase )
 			max_increase = temp_max_increase;
+#endif
 	}
 #endif
 
@@ -471,6 +495,12 @@ ISR( WDT_vect )
 	{
 		local_output_level = user_set_level;
 	}
+
+	uint8_t temp_offset = g_temp_table[temp_table_index];
+	// TODO: see if 2nd cast is needed. It uses an extra word.
+	uint16_t max_level = (uint16_t)USER_LEVEL_MAX - (uint16_t)temp_offset;
+	if( local_output_level > max_level )
+		local_output_level = max_level;
 
 	/*
 		If we reach the lower level, just turn the light off. Our sleep
@@ -608,7 +638,7 @@ int main(void)
 			else if( state == STATE_THERMAL_CONFIG )
 			{
 				/* store current temperature as limit in eeprom */
-				eeprom_write_byte( (uint8_t*)0, temp_limit );
+				eeprom_write_byte( (uint8_t*)0, g_current_temperature );
 			}
 		}
 		else if( click_count == 2 )
@@ -634,7 +664,10 @@ int main(void)
 		state = STATE_RAMP_UP;
 		click_count = 0;
 		/* read some config from eeprom */
-		temp_limit = eeprom_read_byte( (uint8_t*)0 );
+		uint8_t temp_limit_config = eeprom_read_byte( (uint8_t*)0 );
+		g_temperature_limit = temp_limit_config;
+		/* sane temperature value until we get a reading */
+		g_current_temperature = temp_limit_config - 5;
 	}
 
 	/* FIXME: too many load/stores here. */
