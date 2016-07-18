@@ -1,6 +1,6 @@
 /*
+	Typical driver layout.
 
-   NANJG 105C Diagram
              ---
            -|   |- VCC
        OTC -|   |- Voltage ADC
@@ -124,11 +124,16 @@ uint8_t do_power_adc;
 
 volatile uint8_t g_temperature_limit __attribute__ ((section (".noinit")));
 volatile uint8_t g_current_temperature __attribute__ ((section (".noinit")));
-#define TEMP_TABLE_SIZE 7
+int8_t g_temperature_window_low;
+#define TEMPERATURE_WINDOW_ADJUST_DELAY 10
+uint8_t g_seconds_until_window_adjust = 0;
+#define TEMP_TABLE_SIZE 8
+#if 0
 static const uint8_t g_temp_table[TEMP_TABLE_SIZE] =
 {
-	0, 20, 45, 80, 125, 175, 225
+	0, 35, 70, 105, 140, 175, 210, 245
 };
+#endif
 
 static void empty_gate()
 {
@@ -385,15 +390,8 @@ ISR( TIM0_OVF_vect )
 }
 
 /* Watchdog interrupt. */
-uint8_t dog_count;
 ISR( WDT_vect )
 {
-	++wdt_count;
-
-	/* Reset click count after 320 ms */
-	if( wdt_count == 20 )
-		click_count = 0;
-
 	uint8_t temperature = (((uint16_t)counter_high << 8) | TCNT0) >> 1;
 	/*
 		It's ok to reset this right now because charge_gate() won't take long
@@ -404,13 +402,35 @@ ISR( WDT_vect )
 	TCNT0 = 0;
 	counter_high = 0;
 
+	++wdt_count;
+
+	/* Reset click count after 320 ms */
+	if( wdt_count == 20 )
+		click_count = 0;
+
+	/* Let temperature window drift back to its normal value. */
+	if( (wdt_count & 0x3f) == 0 )
+	{
+		if( --g_seconds_until_window_adjust == 0 &&
+		    g_temperature_window_low < -1 )
+		{
+			++g_temperature_window_low;
+			g_seconds_until_window_adjust = TEMPERATURE_WINDOW_ADJUST_DELAY;
+		}
+	}
+
 	/* Update current temp with a small window as this is a noisy. */
 	uint8_t current_temp = g_current_temperature;
 	int8_t d_temp = temperature - current_temp;
 	if( d_temp > 1 )
 		++current_temp;
-	if( d_temp < -1 )
+	if( d_temp < g_temperature_window_low )
+	{
 		--current_temp;
+		/* Increase window temporarily to slow down the intensity increase. */
+		--g_temperature_window_low;
+		g_seconds_until_window_adjust = TEMPERATURE_WINDOW_ADJUST_DELAY;
+	}
 	g_current_temperature = current_temp;
 
 	/*
@@ -427,9 +447,8 @@ ISR( WDT_vect )
 		}
 	}
 	/* Ramp down more slowly than we ramp up. */
-	if( state == STATE_RAMP_DOWN && ++dog_count == 2 )
+	if( state == STATE_RAMP_DOWN && (wdt_count & 0x2) != 0 )
 	{
-		dog_count = 0;
 		--user_set_level;
 		if( user_set_level <= USER_LEVEL_MIN )
 		{
@@ -485,8 +504,8 @@ ISR( WDT_vect )
 		local_output_level = user_set_level;
 	}
 
-	uint8_t temp_offset = g_temp_table[temp_table_index];
-	// TODO: see if 2nd cast is needed. It uses an extra word.
+	//uint8_t temp_offset = g_temp_table[temp_table_index];
+	uint8_t temp_offset = temp_table_index << 5;
 	uint16_t max_level = (uint16_t)USER_LEVEL_MAX - (uint16_t)temp_offset;
 	if( local_output_level > max_level )
 		local_output_level = max_level;
@@ -556,6 +575,10 @@ int main(void)
 	*/
 #define CELL_INIT_VALUE (ADC_CELL_LOWEST < 128 ? ADC_CELL_LOWEST + 127 : 255)
 	cell_level = CELL_INIT_VALUE;
+
+	/* default value. Set here as .data eats too much code space. */
+	// TODO: see if we can simply start with 0
+	g_temperature_window_low = -1;
 
 	/* drain anything left from before click */
 	empty_gate();
