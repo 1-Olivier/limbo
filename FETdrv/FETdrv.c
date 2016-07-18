@@ -419,20 +419,6 @@ ISR( WDT_vect )
 		}
 	}
 
-	/* Update current temp with a small window as this is a noisy. */
-	uint8_t current_temp = g_current_temperature;
-	int8_t d_temp = temperature - current_temp;
-	if( d_temp > 1 )
-		++current_temp;
-	if( d_temp < g_temperature_window_low )
-	{
-		--current_temp;
-		/* Increase window temporarily to slow down the intensity increase. */
-		--g_temperature_window_low;
-		g_seconds_until_window_adjust = TEMPERATURE_WINDOW_ADJUST_DELAY;
-	}
-	g_current_temperature = current_temp;
-
 	/*
 		TODO: Try a square ramp or some variant. Seems to not ramp fast
 		enough at the high end.
@@ -477,23 +463,38 @@ ISR( WDT_vect )
 	/*
 		If output level is high enough that we entered idle mode last time
 		around, use the temperature readout.
-
-		Note that this conveniently ignores the reading of the first interrupt
-		which is likely incorrect. Output level will still be very low then.
-		We'll need to do this explicitly if there's ever a way to start at
-		higher output.
 	*/
 #ifdef TEMPERATURE_THRESHOLD_LEVEL
 	uint8_t temp_table_index = 0;
-	if( local_output_level >= TEMPERATURE_THRESHOLD_LEVEL &&
-	    state != STATE_THERMAL_CONFIG )
+	if( local_output_level >= TEMPERATURE_THRESHOLD_LEVEL )
 	{
-		int8_t temp_offset = current_temp - g_temperature_limit;
-		if( temp_offset > 0 )
+		/*
+			Update current temp with a small window as this is a noisy. The
+			slow update (+/- 1 per WDT interrupt) nicely handles any initial
+			bad reading we might get.
+		*/
+		uint8_t current_temp = g_current_temperature;
+		int8_t d_temp = temperature - current_temp;
+		if( d_temp > 1 )
+			++current_temp;
+		if( d_temp < g_temperature_window_low )
 		{
-			temp_table_index = temp_offset;
-			if( temp_table_index > (TEMP_TABLE_SIZE - 1) )
-				temp_table_index = TEMP_TABLE_SIZE - 1;
+			--current_temp;
+			/* Increase window temporarily to slow down the intensity increase. */
+			--g_temperature_window_low;
+			g_seconds_until_window_adjust = TEMPERATURE_WINDOW_ADJUST_DELAY;
+		}
+		g_current_temperature = current_temp;
+
+		if( state != STATE_THERMAL_CONFIG )
+		{
+			int8_t temp_offset = current_temp - g_temperature_limit;
+			if( temp_offset > 0 )
+			{
+				temp_table_index = temp_offset;
+				if( temp_table_index > (TEMP_TABLE_SIZE - 1) )
+					temp_table_index = TEMP_TABLE_SIZE - 1;
+			}
 		}
 	}
 #endif
