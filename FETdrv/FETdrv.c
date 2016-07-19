@@ -581,10 +581,12 @@ int main(void)
 	// TODO: see if we can simply start with 0
 	g_temperature_window_low = -1;
 
-	/* drain anything left from before click */
-	empty_gate();
+	/* Drain anything left in the gate from before click. Does not seem really
+	   needed so far. */
+	DDRB |= (1 << DDB1);
 
 	/* initialize ADC to read OTC */
+	// TODO: not used anymore. can be dropped.
 	/* disable digital input */
 	DIDR0 |= (1 << ADC3D);
 	/* internal ref, left adjusted, ADC3 (PB3) */
