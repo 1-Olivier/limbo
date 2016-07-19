@@ -106,10 +106,10 @@ uint16_t output_level __attribute__ ((section (".noinit")));
 	used).
 */
 uint8_t state __attribute__ ((section (".noinit")));
-#define STATE_RAMP_UP 0x00
-#define STATE_STEADY 0x10
-#define STATE_RAMP_DOWN 0x20
-#define STATE_THERMAL_CONFIG 0x40
+#define STATE_RAMP_UP 0
+#define STATE_STEADY 1
+#define STATE_RAMP_DOWN 2
+#define STATE_THERMAL_CONFIG 3
 
 /* Last ADC cell voltage readout. */
 volatile uint8_t cell_level;
