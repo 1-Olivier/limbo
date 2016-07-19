@@ -28,7 +28,7 @@
 */
 
 #if defined(__AVR_ATtiny13A__)
-#	define F_CPU 9600000UL
+#	define F_CPU 4800000UL
 #else
 #	define F_CPU 8000000UL
 #endif
@@ -609,14 +609,6 @@ int main(void)
 	/* enable 7135 output (useful for debugging) */
 	/* also to make sure it doesn't produce crap */
 	DDRB |= (1 << DDB0);
-#if 0
-	/* flash the OTC value */
-	for( uint8_t i = 15; i < otc_value; i += 16 )
-	{
-		flash();
-		_delay_ms( 100 );
-	}
-#endif
 
 #if 0
 	flash_debug( state );
@@ -636,7 +628,6 @@ int main(void)
 	if( user_set_level >= USER_LEVEL_MAX )
 		user_set_level = USER_LEVEL_MAX;
 
-#if 1
 	if( mem_check == 0x55 )
 	{
 		/* short press */
@@ -685,14 +676,10 @@ int main(void)
 
 	/* FIXME: too many load/stores here. */
 	output_level = user_set_level;
-#endif
 
 	/* enable watchdog interrupt */
 	WDTCR |= (1 << WDTIE);
 	sei();
-
-	//empty_gate();
-	//flash();
 
 	/*
 		start counter with clk / 64
