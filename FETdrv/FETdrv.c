@@ -419,14 +419,11 @@ ISR( WDT_vect )
 		}
 	}
 
-	/*
-		TODO: Try a square ramp or some variant. Seems to not ramp fast
-		enough at the high end.
-		ie. user_set_level += 1 + (user_set_level >> 7);
-	*/
+	/* This weird step is to speed up the ramp a little at the high end. */
+	uint8_t level_step = (user_set_level >> 8) + 1u;
 	if( state == STATE_RAMP_UP )
 	{
-		++user_set_level;
+		user_set_level += level_step;
 		if( user_set_level >= USER_LEVEL_MAX )
 		{
 			state = STATE_STEADY;
@@ -435,7 +432,7 @@ ISR( WDT_vect )
 	/* Ramp down more slowly than we ramp up. */
 	if( state == STATE_RAMP_DOWN && (wdt_count & 0x2) != 0 )
 	{
-		--user_set_level;
+		user_set_level -= level_step;
 		if( user_set_level <= USER_LEVEL_MIN )
 		{
 			state = STATE_STEADY;
