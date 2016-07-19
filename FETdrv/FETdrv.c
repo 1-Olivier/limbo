@@ -585,27 +585,14 @@ int main(void)
 	   needed so far. */
 	DDRB |= (1 << DDB1);
 
-	/* initialize ADC to read OTC */
-	// TODO: not used anymore. can be dropped.
-	/* disable digital input */
-	DIDR0 |= (1 << ADC3D);
-	/* internal ref, left adjusted, ADC3 (PB3) */
-	ADMUX = (1 << REFS0) | (1 << ADLAR) | (1 << MUX1) | (1 << MUX0);
-	/* enable, start conversion, prescaler = 1/64 */
-	ADCSRA = (1 << ADEN) | (1 << ADSC) | 0x6;
-
-	while( ADCSRA & (1 << ADSC) )
-	{
-	}
-	uint8_t otc_value = ADCH;
-
-	/* switch ADC to read cell level on ADC1 (PB2) */
-	ADMUX &= ~(1 << MUX1);
+	/* initialize ADC to read cell level on ADC1 (PB2) */
 	/* disable digital input */
 	DIDR0 |= (1 << ADC1D);
+	/* internal ref, left adjusted, ADC1 (PB2) */
+	ADMUX = (1 << REFS0) | (1 << ADLAR) | (1 << MUX0);
+	/* prescaler is set later, when ADC is enabled. */
 
-	/* charge the OTC */
-	DDRB |= (1 << DDB3);
+	/* Don't leave the OTC pin floating. Use pull-up. */
 	PORTB |= (1 << PORTB3);
 
 	/* enable 7135 output (useful for debugging) */
@@ -717,9 +704,15 @@ int main(void)
 		// TODO: move this to function
 		if( do_power_adc )
 		{
-			ADCSRA |= (1 << ADEN);
-			/* Should we give it time to stabilize here? Probably not. */
-			ADCSRA |= (1 << ADSC);
+			/*
+				enable ADC, start conversion, prescaler = 1/64
+
+				We should in theory give it a bit of time for the reference to
+				settle but the extra cycles of the first conversion appear to
+				be enough with the slow ADC clock used here. The result is very
+				stable.
+			*/
+			ADCSRA = (1 << ADEN) | (1 << ADSC) | 0x6;
 			while( ADCSRA & (1 << ADSC ) )
 			{
 			}
