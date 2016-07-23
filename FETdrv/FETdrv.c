@@ -105,7 +105,7 @@ uint16_t output_level __attribute__ ((section (".noinit")));
 	merged with the high byte of the level (of which only the low nibble is
 	used).
 */
-uint8_t state __attribute__ ((section (".noinit")));
+uint8_t g_state __attribute__ ((section (".noinit")));
 #define STATE_RAMP_UP 0
 #define STATE_STEADY 1
 #define STATE_RAMP_DOWN 2
@@ -424,6 +424,7 @@ ISR( WDT_vect )
 
 	/* This weird step is to speed up the ramp a little at the high end. */
 	uint8_t level_step = (user_set_level >> 8) + 1u;
+	uint8_t state = g_state;
 	if( state == STATE_RAMP_UP )
 	{
 		user_set_level += level_step;
@@ -441,6 +442,7 @@ ISR( WDT_vect )
 			state = STATE_STEADY;
 		}
 	}
+	g_state = state;
 
 	/*
 		Now figure out the actual output level from the requested level. It
@@ -634,6 +636,8 @@ int main(void)
 	if( user_set_level >= USER_LEVEL_MAX )
 		user_set_level = USER_LEVEL_MAX;
 
+	uint8_t state = g_state;
+
 	if( mem_check == 0x55 )
 	{
 		/* short press */
@@ -679,6 +683,8 @@ int main(void)
 		/* sane temperature value until we get a reading */
 		g_current_temperature = temp_limit_config;
 	}
+
+	g_state = state;
 
 	/* FIXME: too many load/stores here. */
 	output_level = user_set_level;
