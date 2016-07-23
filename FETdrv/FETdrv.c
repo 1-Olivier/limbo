@@ -125,6 +125,7 @@ uint8_t do_power_adc;
 volatile uint8_t g_temperature_limit __attribute__ ((section (".noinit")));
 volatile uint8_t g_current_temperature __attribute__ ((section (".noinit")));
 int8_t g_temperature_window_low;
+int8_t g_temperature_window_high;
 #define TEMPERATURE_WINDOW_ADJUST_DELAY 10
 uint8_t g_seconds_until_window_adjust = 0;
 #define TEMP_TABLE_SIZE 8
@@ -411,10 +412,12 @@ ISR( WDT_vect )
 	/* Let temperature window drift back to its normal value. */
 	if( (wdt_count & 0x3f) == 0 )
 	{
-		if( --g_seconds_until_window_adjust == 0 &&
-		    g_temperature_window_low < -1 )
+		if( --g_seconds_until_window_adjust == 0 )
 		{
-			++g_temperature_window_low;
+			if( g_temperature_window_low < -1 )
+				++g_temperature_window_low;
+			if( g_temperature_window_high > 1 )
+				--g_temperature_window_high;
 			g_seconds_until_window_adjust = TEMPERATURE_WINDOW_ADJUST_DELAY;
 		}
 	}
@@ -472,8 +475,13 @@ ISR( WDT_vect )
 		*/
 		uint8_t current_temp = g_current_temperature;
 		int8_t d_temp = temperature - current_temp;
-		if( d_temp > 1 )
+		if( d_temp > g_temperature_window_high )
+		{
 			++current_temp;
+			/* Increase window temporarily to slow down the intensity decrease. */
+			++g_temperature_window_high;
+			g_seconds_until_window_adjust = TEMPERATURE_WINDOW_ADJUST_DELAY;
+		}
 		if( d_temp < g_temperature_window_low )
 		{
 			--current_temp;
