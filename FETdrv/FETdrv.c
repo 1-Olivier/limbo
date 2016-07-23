@@ -128,11 +128,11 @@ int8_t g_temperature_window_low;
 int8_t g_temperature_window_high;
 #define TEMPERATURE_WINDOW_ADJUST_DELAY 10
 uint8_t g_seconds_until_window_adjust = 0;
-#define TEMP_TABLE_SIZE 8
-#if 0
-static const uint8_t g_temp_table[TEMP_TABLE_SIZE] =
+#if 1
+#include <avr/pgmspace.h>
+static const uint8_t g_temp_table[] PROGMEM =
 {
-	0, 35, 70, 105, 140, 175, 210, 245
+	25, 65, 95, 115, 135, 155, 175, 195
 };
 #endif
 
@@ -465,7 +465,7 @@ ISR( WDT_vect )
 		around, use the temperature readout.
 	*/
 #ifdef TEMPERATURE_THRESHOLD_LEVEL
-	uint8_t temp_table_index = 0;
+	uint8_t temp_offset = 0;
 	if( local_output_level >= TEMPERATURE_THRESHOLD_LEVEL )
 	{
 		/*
@@ -475,14 +475,21 @@ ISR( WDT_vect )
 		*/
 		uint8_t current_temp = g_current_temperature;
 		int8_t d_temp = temperature - current_temp;
+		uint8_t temperature_limit = g_temperature_limit;
 		if( d_temp > g_temperature_window_high )
 		{
 			++current_temp;
-			/* Increase window temporarily to slow down the intensity decrease. */
-			++g_temperature_window_high;
+			/*
+				Increase window temporarily to slow down the intensity decrease.
+				Only do it once above temp limit or we'll have increased it by
+				a huge amount from cold to hot.
+				FIXME: should not do this in thermal config
+			*/
+			if( (int8_t)(current_temp - temperature_limit) > 0 )
+				++g_temperature_window_high;
 			g_seconds_until_window_adjust = TEMPERATURE_WINDOW_ADJUST_DELAY;
 		}
-		if( d_temp < g_temperature_window_low )
+		else if( d_temp < g_temperature_window_low )
 		{
 			--current_temp;
 			/* Increase window temporarily to slow down the intensity increase. */
@@ -493,12 +500,19 @@ ISR( WDT_vect )
 
 		if( state != STATE_THERMAL_CONFIG )
 		{
-			int8_t temp_offset = current_temp - g_temperature_limit;
-			if( temp_offset > 0 )
+			int8_t temp_overshoot = current_temp - temperature_limit;
+			if( temp_overshoot > 0 )
 			{
-				temp_table_index = temp_offset;
-				if( temp_table_index > (TEMP_TABLE_SIZE - 1) )
-					temp_table_index = TEMP_TABLE_SIZE - 1;
+				uint8_t temp_table_index = temp_overshoot;
+				if( temp_table_index > sizeof(g_temp_table) )
+					temp_table_index = sizeof(g_temp_table);
+
+#if 1
+				temp_offset = pgm_read_byte(
+						&g_temp_table[temp_table_index - 1] );
+#else
+				temp_offset = temp_table_index << 5;
+#endif
 			}
 		}
 	}
@@ -510,8 +524,6 @@ ISR( WDT_vect )
 		local_output_level = user_set_level;
 	}
 
-	//uint8_t temp_offset = g_temp_table[temp_table_index];
-	uint8_t temp_offset = temp_table_index << 5;
 	uint16_t max_level = (uint16_t)USER_LEVEL_MAX - (uint16_t)temp_offset;
 	if( local_output_level > max_level )
 		local_output_level = max_level;
@@ -665,7 +677,7 @@ int main(void)
 		uint8_t temp_limit_config = eeprom_read_byte( (uint8_t*)0 );
 		g_temperature_limit = temp_limit_config;
 		/* sane temperature value until we get a reading */
-		g_current_temperature = temp_limit_config - 5;
+		g_current_temperature = temp_limit_config;
 	}
 
 	/* FIXME: too many load/stores here. */
