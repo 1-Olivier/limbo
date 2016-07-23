@@ -36,6 +36,7 @@
 #include <avr/io.h>
 #include <avr/eeprom.h>
 #include <avr/interrupt.h>
+#include <avr/pgmspace.h>
 #include <avr/sleep.h>
 #include <util/delay.h>
 
@@ -126,15 +127,12 @@ volatile uint8_t g_temperature_limit __attribute__ ((section (".noinit")));
 volatile uint8_t g_current_temperature __attribute__ ((section (".noinit")));
 int8_t g_temperature_window_low;
 int8_t g_temperature_window_high;
-#define TEMPERATURE_WINDOW_ADJUST_DELAY 10
+#define TEMPERATURE_WINDOW_ADJUST_DELAY 8
 uint8_t g_seconds_until_window_adjust = 0;
-#if 1
-#include <avr/pgmspace.h>
 static const uint8_t g_temp_table[] PROGMEM =
 {
 	25, 65, 95, 115, 135, 155, 175, 195
 };
-#endif
 
 static void empty_gate()
 {
@@ -484,11 +482,14 @@ ISR( WDT_vect )
 			/*
 				Increase window temporarily to slow down the intensity decrease.
 				Only do it once above temp limit or we'll have increased it by
-				a huge amount from cold to hot.
-				FIXME: should not do this in thermal config
+				a huge amount from cold to hot. Also do not do it while in
+				thermal config mode or the recorded reading will be wrong.
 			*/
-			if( (int8_t)(current_temp - temperature_limit) > 0 )
+			if( state != STATE_THERMAL_CONFIG &&
+			    (int8_t)(current_temp - temperature_limit) > 0 )
+			{
 				++g_temperature_window_high;
+			}
 			g_seconds_until_window_adjust = TEMPERATURE_WINDOW_ADJUST_DELAY;
 		}
 		else if( d_temp < g_temperature_window_low )
