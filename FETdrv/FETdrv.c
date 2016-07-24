@@ -611,17 +611,6 @@ int main(void)
 	/* also to make sure it doesn't produce crap */
 	DDRB |= (1 << DDB0);
 
-#if 0
-	flash_debug( state );
-	state = 0x55;
-	_delay_ms( 2500 );
-	if( (MCUSR & (1 << BORF)) )
-	{
-		flash();
-	}
-	while( 1 == 1 );
-#endif
-
 	/* Click starts from the actual output level (limited by temp or Vcc). */
 	user_set_level = output_level;
 
@@ -692,10 +681,7 @@ int main(void)
 		in 16 bits, with room to spare. Yet it must be high enough that there
 		is enough resolution to detect the desired changes.
 	*/
-	//TCCR0B = (1 << CS00); // clk
-	//TCCR0B = (1 << CS01); // clk / 8 (appears to work when used directly)
-	TCCR0B = (1 << CS01) | (1 << CS00); // clk/64
-	//TCCR0B = (1 << CS02); // clk / 256
+	TCCR0B = (1 << CS01) | (1 << CS00);
 
 	/*
 		Potential states to handle here:
