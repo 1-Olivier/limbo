@@ -129,10 +129,6 @@ int8_t g_temperature_window_low;
 int8_t g_temperature_window_high;
 #define TEMPERATURE_WINDOW_ADJUST_DELAY 8
 uint8_t g_seconds_until_window_adjust = 0;
-static const uint8_t g_temp_table[] PROGMEM =
-{
-	25, 65, 95, 115, 135, 155, 175, 195, 225, 255
-};
 
 static void empty_gate()
 {
@@ -381,17 +377,9 @@ int8_t update_control_stats(
 		return 0;
 }
 
-/* Counter overflow interrupt. */
-uint8_t counter_high;
-ISR( TIM0_OVF_vect )
-{
-	++counter_high;
-}
-
 /* Watchdog interrupt. */
 ISR( WDT_vect )
 {
-	//uint8_t temperature = (((uint16_t)counter_high << 8) | TCNT0) >> 1;
 	uint8_t temperature = TCNT0;
 	/*
 		It's ok to reset this right now because charge_gate() won't take long
@@ -400,7 +388,6 @@ ISR( WDT_vect )
 		measures.
 	*/
 	TCNT0 = 0;
-	counter_high = 0;
 
 	++wdt_count;
 
@@ -507,14 +494,6 @@ ISR( WDT_vect )
 			int8_t temp_overshoot = current_temp - temperature_limit;
 			if( temp_overshoot > 0 )
 			{
-#if 0
-				uint8_t temp_table_index = temp_overshoot;
-				if( temp_table_index > sizeof(g_temp_table) )
-					temp_table_index = sizeof(g_temp_table);
-
-				temp_offset = pgm_read_byte(
-						&g_temp_table[temp_table_index - 1] );
-#else
 				uint8_t uover = temp_overshoot;
 				if( uover > 25 )
 					uover = 25;
@@ -523,7 +502,12 @@ ISR( WDT_vect )
 				if( uover > 6 )
 					uover = 6;
 				temp_offset += uover << 3;
-#endif
+				/*
+					Largest temp_offset value will be 248. Would need a 16-bit
+					variable to go larger but there's no point with the current
+					level range. USER_LEVEL_MAX - 248 is too low to generate a
+					lot of heat.
+				*/
 			}
 		}
 	}
@@ -712,9 +696,6 @@ int main(void)
 	//TCCR0B = (1 << CS01); // clk / 8 (appears to work when used directly)
 	TCCR0B = (1 << CS01) | (1 << CS00); // clk/64
 	//TCCR0B = (1 << CS02); // clk / 256
-
-	/* enable counter overflow interrupt */
-	TIMSK0 |= (1 << TOIE0);
 
 	/*
 		Potential states to handle here:
