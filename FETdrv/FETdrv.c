@@ -330,56 +330,6 @@ void load_state_from_eeprom()
 }
 #endif
 
-/*
-	This updates statistics and history about a variable used to limit the
-	light output and makes a decision based on that data.
-
-	control_value
-		The offset to the limit value. If > 0, we need to lower light output.
-	history_buffer
-		Used to track change of control_value over time.
-
-	RETURNS
-		Max increase to light value. 0 if we can't increase, < 0 is we must
-		decrease.
-*/
-static
-int8_t update_control_stats(
-	int8_t control_value,
-	int8_t *history_buffer )
-{
-	if( control_value == 0 )
-		return 0;
-
-	uint8_t interrupt_count = history_buffer[0] - 1;
-	int8_t step = -1;
-
-	if( control_value < 0 )
-	{
-		control_value = -control_value;
-		step = 1;
-	}
-
-	uint8_t min_count = 0x1f;
-	while( --control_value )
-	{
-		if( min_count == 0 )
-			return step << 2;
-
-		min_count >>= 1;
-	}
-
-	if( min_count < interrupt_count )
-		interrupt_count = min_count;
-
-	history_buffer[0] = interrupt_count;
-
-	if( interrupt_count == 0 )
-		return step;
-	else
-		return 0;
-}
-
 /* Watchdog interrupt. */
 ISR( WDT_vect )
 {
