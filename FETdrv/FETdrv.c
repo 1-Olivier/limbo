@@ -131,7 +131,7 @@ int8_t g_temperature_window_high;
 uint8_t g_seconds_until_window_adjust = 0;
 static const uint8_t g_temp_table[] PROGMEM =
 {
-	25, 65, 95, 115, 135, 155, 175, 195
+	25, 65, 95, 115, 135, 155, 175, 195, 225, 255
 };
 
 static void empty_gate()
