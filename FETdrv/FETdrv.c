@@ -94,6 +94,9 @@ uint16_t user_set_level __attribute__ ((section (".noinit")));
 #define USER_LEVEL_MAX 450
 /* Level above which temperature control is enabled. Undefine to disable. */
 #define TEMPERATURE_THRESHOLD_LEVEL 180
+/* When defined, USER_LEVEL_MAX is a turbo (full on). Comment this to use a
+   lower max level without turbo (eg. on a light which can't handle turbo). */
+#define MAX_LEVEL_IS_TURBO
 
 /*
 	Output level we're actually using, after taking into account low voltage
@@ -185,7 +188,7 @@ void apply_output_level( uint16_t level )
 	empty_gate();
 	// FIXME: could this underflow with invalid (0) user_set_level?
 	charge_gate( (gate_level >> 1) - 6u );
-#if 1
+#ifdef MAX_LEVEL_IS_TURBO
 	/* Quick hack to make sure max really is max. */
 	if( level == USER_LEVEL_MAX )
 	{
