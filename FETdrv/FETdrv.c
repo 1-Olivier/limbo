@@ -391,7 +391,8 @@ ISR( TIM0_OVF_vect )
 /* Watchdog interrupt. */
 ISR( WDT_vect )
 {
-	uint8_t temperature = (((uint16_t)counter_high << 8) | TCNT0) >> 1;
+	//uint8_t temperature = (((uint16_t)counter_high << 8) | TCNT0) >> 1;
+	uint8_t temperature = TCNT0;
 	/*
 		It's ok to reset this right now because charge_gate() won't take long
 		enough for TCNT0 to overflow. It's also better to do it close to the
@@ -412,9 +413,9 @@ ISR( WDT_vect )
 	{
 		if( --g_seconds_until_window_adjust == 0 )
 		{
-			if( g_temperature_window_low < -1 )
+			if( g_temperature_window_low < -2 )
 				++g_temperature_window_low;
-			if( g_temperature_window_high > 1 )
+			if( g_temperature_window_high > 2 )
 				--g_temperature_window_high;
 			g_seconds_until_window_adjust = TEMPERATURE_WINDOW_ADJUST_DELAY;
 		}
@@ -506,15 +507,22 @@ ISR( WDT_vect )
 			int8_t temp_overshoot = current_temp - temperature_limit;
 			if( temp_overshoot > 0 )
 			{
+#if 0
 				uint8_t temp_table_index = temp_overshoot;
 				if( temp_table_index > sizeof(g_temp_table) )
 					temp_table_index = sizeof(g_temp_table);
 
-#if 1
 				temp_offset = pgm_read_byte(
 						&g_temp_table[temp_table_index - 1] );
 #else
-				temp_offset = temp_table_index << 5;
+				uint8_t uover = temp_overshoot;
+				if( uover > 25 )
+					uover = 25;
+
+				temp_offset = uover << 3;
+				if( uover > 6 )
+					uover = 6;
+				temp_offset += uover << 3;
 #endif
 			}
 		}
