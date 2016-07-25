@@ -36,7 +36,6 @@
 #include <avr/io.h>
 #include <avr/eeprom.h>
 #include <avr/interrupt.h>
-#include <avr/pgmspace.h>
 #include <avr/sleep.h>
 #include <util/delay.h>
 
@@ -132,6 +131,7 @@ int8_t g_temperature_window_low;
 int8_t g_temperature_window_high;
 #define TEMPERATURE_WINDOW_ADJUST_DELAY 8
 uint8_t g_seconds_until_window_adjust = 0;
+#define TEMPERATURE_CONFIG_ADDRESS 1
 
 static void empty_gate()
 {
@@ -542,10 +542,6 @@ int main(void)
 #define CELL_INIT_VALUE (ADC_CELL_LOWEST < 128 ? ADC_CELL_LOWEST + 127 : 255)
 	cell_level = CELL_INIT_VALUE;
 
-	/* default value. Set here as .data eats too much code space. */
-	// TODO: see if we can simply start with 0
-	g_temperature_window_low = -1;
-
 	/* Drain anything left in the gate from before click. Does not seem really
 	   needed so far. */
 	DDRB |= (1 << DDB1);
@@ -587,7 +583,9 @@ int main(void)
 			else if( state == STATE_THERMAL_CONFIG )
 			{
 				/* store current temperature as limit in eeprom */
-				eeprom_write_byte( (uint8_t*)0, g_current_temperature );
+				eeprom_write_byte(
+					(uint8_t*)TEMPERATURE_CONFIG_ADDRESS,
+					g_current_temperature );
 			}
 		}
 		else if( click_count == 2 )
@@ -613,7 +611,8 @@ int main(void)
 		state = STATE_RAMP_UP;
 		click_count = 0;
 		/* read some config from eeprom */
-		uint8_t temp_limit_config = eeprom_read_byte( (uint8_t*)0 );
+		uint8_t temp_limit_config = eeprom_read_byte(
+			(uint8_t*)TEMPERATURE_CONFIG_ADDRESS );
 		g_temperature_limit = temp_limit_config;
 		/* sane temperature value until we get a reading */
 		g_current_temperature = temp_limit_config;
