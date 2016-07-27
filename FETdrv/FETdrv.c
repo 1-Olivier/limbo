@@ -89,8 +89,8 @@ uint8_t wdt_count;
 /* Output level which the user selected. */
 uint16_t user_set_level __attribute__ ((section (".noinit")));
 #define USER_LEVEL_MIN 120
-/* Max is slightly above 400. */
 #define USER_LEVEL_MAX 450
+#define USER_LEVEL_START (USER_LEVEL_MIN + 30)
 /* Level above which temperature control is enabled. Undefine to disable. */
 #define TEMPERATURE_THRESHOLD_LEVEL 180
 /* When defined, USER_LEVEL_MAX is a turbo (full on). Comment this to use a
@@ -607,7 +607,7 @@ int main(void)
 	{
 		/* cold start */
 		mem_check = 0x55;
-		user_set_level = USER_LEVEL_MIN;
+		user_set_level = USER_LEVEL_START;
 		state = STATE_RAMP_UP;
 		click_count = 0;
 		/* read some config from eeprom */
