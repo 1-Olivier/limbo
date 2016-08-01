@@ -1,5 +1,17 @@
+# Set this to the drive you want to build for.
 DRIVER := BLFA6
 
+# This makefile has the following useful targets:
+# - build (the default) : just build the firmware.
+# - flash : build the firmware and flash it to the MCU (does NOT include fuses).
+# - check_link : check connection of AVR programmer.
+# - show_eeprom : get eeprom content from MCU and show it.
+# - verify_fuses : check MCU fuses against values wanted by the firmware.
+# - flash_fuses : flash the MCU fuses to the values wanted by the firmware.
+
+.PHONY: build asm clean flash check_link show_eeprom verify_fuses flash_fuses
+
+# Include driver makefile definitions from same directory as this Makefile
 include $(dir $(lastword $(MAKEFILE_LIST)))Makefile.$(DRIVER).defs
 
 %.elf: %.c
