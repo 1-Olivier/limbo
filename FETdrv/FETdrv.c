@@ -16,17 +16,6 @@
              ---
 */
 
-/*
-	Potential config options:
-	- memory
-	- initial ramp direction (?)
-	- mode list
-	- limit temp
-
-	Config should be stored separately from state to keep state to 2 bytes.
-	Probably does not need wear leveling as it isn't changed often.
-*/
-
 #if defined(__AVR_ATtiny13A__)
 #	define F_CPU 4800000UL
 #else
@@ -121,9 +110,6 @@ volatile uint8_t cell_level;
 
 /* 0 = no, 1 = start */
 uint8_t do_power_adc;
-
-/* current eeprom address for state */
-//uint8_t eeprom_state_addr __attribute__ ((section (".noinit")));
 
 volatile uint8_t g_temperature_limit __attribute__ ((section (".noinit")));
 volatile uint8_t g_current_temperature __attribute__ ((section (".noinit")));
@@ -244,91 +230,6 @@ void eeprom_program()
 	/* Enable interrupts again. */
 	sei();
 }
-
-#if 0
-/*
-	TODO: see if the wait, MPE, PE sequence can be moved to a function. I don't
-	remember of the address register is latched or not. Seems not, see FAQ
-	about eeprom address 0 corruption at
-	http://www.atmel.com/webdoc/AVRLibcReferenceManual/FAQ_1faq_eeprom_corruption.html
-
-	TODO: Add interrupt disable in the above sequence, if relevent. Perhaps not
-	as we can read state before interrupts are enabled and write it from within
-	an interrupt.
-		Update: Actually, I don't think we can write from within the WDT
-		interrupt as we'll miss counter interrupts.
-
-	Interrupts are assumed to be enabled when this is called.
-*/
-static
-void save_state_to_eeprom()
-{
-	/* Write current state to next location in eeprom, for wear leveling. */
-	uint8_t eep_addr = eeprom_state_addr;
-	eep_addr += 2;
-	eeprom_state_addr = eep_addr;
-	/* Write first byte. */
-	EEARL = eep_addr;
-	EECR |= (1 << EEPM1); /* write only */
-	EEDR = state | (user_set_level >> 8);
-	eeprom_program();
-	/* Write second byte. */
-	EEARL |= 1;
-	EEDR = user_set_level;
-	eeprom_program();
-	EECR &= ~(1 << EEPM1); /* back to atomic mode */
-
-	/* Clear previous state. */
-	EEARL = eep_addr - 2;
-	EECR |= (1 << EEPM0); /* erase only */
-	eeprom_program();
-	/* second byte */
-	EEARL |= 1;
-	eeprom_program();
-	EECR &= ~(1 << EEPM0); /* back to atomic mode */
-
-}
-
-/*
-	We roll our own eeprom access to save some code space. We assume that there
-	are no writes in progress. Loading the state should be the first eeprom
-	operation we do and we should do it only once.
-
-	Assumes interruptions are disabled.
-*/
-static
-void load_state_from_eeprom()
-{
-	uint8_t eep_addr;
-	for( eep_addr = 0; eep_addr < 64; eep_addr += 2 )
-	{
-#if 1
-		EEARL = eep_addr;
-		EECR |= (1 << EERE);
-		uint8_t eep_data = EEDR;
-#else
-		uint8_t eep_data = eeprom_read_byte( (const uint8_t*)(uint16_t)eep_addr );
-#endif
-		if( eep_data != 0xff )
-		{
-			/* read second byte */
-#if 1
-			EEARL |= 1;
-			EECR |= (1 << EERE);
-			uint8_t eep_data2 = EEDR;
-#else
-			uint8_t eep_data2 = eeprom_read_byte( (const uint8_t*)(uint16_t)(eep_addr + 1) );
-#endif
-			/* put in state variables */
-			state = eep_data & 0xf0;
-			user_set_level = eep_data2 | ((eep_data & 0x0f) << 8);
-			/* save address for later state save */
-			eeprom_state_addr = eep_addr;
-			break;
-		}
-	}
-}
-#endif
 
 /* Watchdog interrupt. */
 ISR( WDT_vect )
@@ -635,21 +536,6 @@ int main(void)
 	*/
 	TCCR0B = (1 << CS01) | (1 << CS00);
 
-	/*
-		Potential states to handle here:
-		- Ramping up.
-		- Ramping down.
-		- Steady output.
-		- Temperature configuration mode.
-		- Range configuration mode?
-		- Modelist configuration
-
-		They should likely all do Vcc ADC.
-		Perhaps just put it in WDT? Start it at the end, fetch result going in!
-		Problem if we want to power down between interrupts. Perhaps just check
-		do_power_adc and power down when none is running. Won't power down as
-		fast though (one WDT cycle vs one ADC cycle).
-	*/
 	while( 1 == 1 )
 	{
 		// TODO: move this to function
@@ -714,7 +600,7 @@ int main(void)
 			do_power_adc = 0;
 		}
 
-		/* Sleep until next interrupt. */
+		/* Sleep or power down until next interrupt. */
 		sleep_mode();
 	}
 }
