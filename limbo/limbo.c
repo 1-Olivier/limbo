@@ -79,7 +79,6 @@ uint8_t wdt_count;
 uint16_t user_set_level __attribute__ ((section (".noinit")));
 #define USER_LEVEL_MIN 120
 #define USER_LEVEL_MAX 450
-#define USER_LEVEL_START (USER_LEVEL_MIN + 30)
 /* Level above which temperature control is enabled. Undefine to disable. */
 #define TEMPERATURE_THRESHOLD_LEVEL 180
 /* When defined, USER_LEVEL_MAX is a turbo (full on). Comment this to use a
@@ -92,11 +91,7 @@ uint16_t user_set_level __attribute__ ((section (".noinit")));
 */
 uint16_t output_level __attribute__ ((section (".noinit")));
 
-/*
-	Uses only the high nibble. Important for eeprom read/write as this gets
-	merged with the high byte of the level (of which only the low nibble is
-	used).
-*/
+/* Current state. */
 uint8_t g_state __attribute__ ((section (".noinit")));
 #define STATE_RAMP_UP 0
 #define STATE_STEADY 1
@@ -107,6 +102,10 @@ uint8_t g_state __attribute__ ((section (".noinit")));
 volatile uint8_t cell_level;
 #define ADC_CELL_100 ADC8_FROM_CELL_V( 420 )
 #define ADC_CELL_LOWEST ADC8_FROM_CELL_V( 300 )
+
+/* This sets the initial state on a cold start. */
+#define USER_LEVEL_START (USER_LEVEL_MIN + 30)
+#define START_STATE STATE_RAMP_UP
 
 /* 0 = no, 1 = start */
 uint8_t do_power_adc;
@@ -510,7 +509,7 @@ int main(void)
 		/* cold start */
 		mem_check = 0x55;
 		user_set_level = USER_LEVEL_START;
-		state = STATE_RAMP_UP;
+		state = START_STATE;
 		click_count = 0;
 		/* read some config from eeprom */
 		uint8_t temp_limit_config = eeprom_read_byte(
