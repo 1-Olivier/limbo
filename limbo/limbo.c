@@ -147,6 +147,14 @@ void charge_gate( uint16_t gate_charge )
 inline static
 void apply_output_level( uint16_t level )
 {
+#ifdef MAX_LEVEL_IS_TURBO
+	/* Quick hack to make sure max really is max. */
+	if( level == USER_LEVEL_MAX )
+	{
+		PORTB |= (1 << PORTB1);
+		return;
+	}
+#endif
 	/*
 		Adjust charge time by dividing by the square of Vcc. This appears to
 		make it fairly stable over the useful range of a cell. I actually use
@@ -174,13 +182,6 @@ void apply_output_level( uint16_t level )
 	empty_gate();
 	// FIXME: could this underflow with invalid (0) user_set_level?
 	charge_gate( (gate_level >> 1) - 6u );
-#ifdef MAX_LEVEL_IS_TURBO
-	/* Quick hack to make sure max really is max. */
-	if( level == USER_LEVEL_MAX )
-	{
-		PORTB |= (1 << PORTB1);
-	}
-#endif
 }
 
 /* flash the 7135 channel to say we're running */
