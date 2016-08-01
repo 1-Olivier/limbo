@@ -497,7 +497,7 @@ int main(void)
 		{
 			state = STATE_STEADY;
 
-			if( click_count > 10 )
+			if( click_count > 8 )
 			{
 				state = STATE_THERMAL_CONFIG;
 				user_set_level = USER_LEVEL_MAX;
