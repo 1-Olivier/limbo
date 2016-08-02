@@ -5,7 +5,7 @@ This is flashlight firmware for attiny based driver with a FET.
 
 ### Driver hardware
 * An attiny13a
-* FET
+* FET without gate pulldown resistor
 * Voltage divider
 
 OTC and 7135 may be present but are unused for now.
@@ -27,9 +27,9 @@ This was tested on the BLF A6 driver so will need to change some constants if yo
 * Should be fairly power efficient but I don't have the equipment to measure it yet.
 
 ### Interface
-The interface is fairly simple as there are few features. The light turns on at a set level, ramping toward the max level. A single click on the switch will stop any ramp at the current level. A single click while it is not ramping will resume the ramp toward the max level. A double click (two clicks within about 0.3s of each other) will make it ramp toward the lowest level, at half the speed.
+The interface is fairly simple as there are few features. The light turns on at a set level, ramping toward the max level. A single click (power off/on cycle) on the switch will stop any ramp at the current level. A single click while it is not ramping will resume the ramp toward the max level. A double click (two clicks within about 0.3s of each other) will make it ramp toward the lowest level, at half the speed. Turning the light off for more than a few seconds will make it start from its initial state next time.
 
-The only soft configuration is thermal limit calibration. This is currently always active so it must be calibrated or the light might never go to high levels. Calibration is done by a series of quick clicks (8) until the light comes on at maximum output. Let it heat up until it is where you want the limit to be and give it a click. Then turn it off and wait several seconds.
+The only soft configuration is thermal limit calibration. This is currently always active so it must be calibrated or the light might never go to high levels. If your ramp stops at a very low level, this is why. Calibration is done by a series of quick clicks (8) until the light comes on at maximum output. Let it heat up until it is where you want the limit to be and give it a click. Then turn it off and wait several seconds.
 
 ### Known issues
-* The output flickers a little. It's not visible for normal use but you might see it if you shine the light at a white wall or ceiling bounce it. This makes the firmware not that great as a reading light if you're sensitive to such things. I suspect either clock jitter or some randomness in the FET.
+* The output flickers a little. It's not visible when moved around but you might see it if you shine the light at a white wall or ceiling bounce it, especially at low output levels. This makes the firmware not that great as a reading light if you're sensitive to such things. I suspect either clock jitter or some randomness in the FET to be the cause. Hopefully the former as that might be improved on an attiny25.
