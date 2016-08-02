@@ -65,6 +65,7 @@ FUSES =
 #include "../include/delay_accurate.h"
 #include "../include/division.h"
 #include "../include/cell_levels.h"
+#include "../include/portability.h"
 
 /* To check memory decay. */
 uint8_t mem_check __attribute__ ((section (".noinit")));
@@ -388,7 +389,7 @@ ISR( WDT_vect )
 		/* enable output, off to empty gate  */
 		DDRB |= (1 << DDB1);
 		/* disable watchdog timer */
-		WDTCR &= ~(1 << WDTIE);
+		watchdog_interrupt_disable();
 		/* power down MCU */
 		sleep_mode();
 	}
@@ -525,7 +526,7 @@ int main(void)
 	output_level = user_set_level;
 
 	/* enable watchdog interrupt */
-	WDTCR |= (1 << WDTIE);
+	watchdog_interrupt_enable();
 	sei();
 
 	/*
