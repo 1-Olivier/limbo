@@ -18,8 +18,12 @@
 
 #if defined(__AVR_ATtiny13A__)
 #	define F_CPU 4800000UL
+	/* 1/64 for 75 kHz operation */
+#	define ADC_PRESCALER_BITS ((1 << ADPS2) | (1 << ADPS1))
 #else
 #	define F_CPU 8000000UL
+	/* 1/128 for 62.5 kHz operation */
+#	define ADC_PRESCALER_BITS ((1 << ADPS2) | (1 << ADPS1) | (1 << ADPS0))
 #endif
 
 #include <avr/io.h>
@@ -453,8 +457,12 @@ int main(void)
 	/* initialize ADC to read cell level on ADC1 (PB2) */
 	/* disable digital input */
 	DIDR0 |= (1 << ADC1D);
-	/* internal ref, left adjusted, ADC1 (PB2) */
+	/* internal 1.1V ref, left adjusted, ADC1 (PB2) */
+#if defined(__AVR_ATtiny13A__)
 	ADMUX = (1 << REFS0) | (1 << ADLAR) | (1 << MUX0);
+#else
+	ADMUX = (1 << REFS1) | (1 << ADLAR) | (1 << MUX0);
+#endif
 	/* prescaler is set later, when ADC is enabled. */
 
 	/* Don't leave the OTC pin floating. Use pull-up. */
@@ -545,14 +553,14 @@ int main(void)
 		if( do_power_adc )
 		{
 			/*
-				enable ADC, start conversion, prescaler = 1/64
+				enable ADC, start conversion, set prescaler
 
 				We should in theory give it a bit of time for the reference to
 				settle but the extra cycles of the first conversion appear to
 				be enough with the slow ADC clock used here. The result is very
 				stable.
 			*/
-			ADCSRA = (1 << ADEN) | (1 << ADSC) | 0x6;
+			ADCSRA = (1 << ADEN) | (1 << ADSC) | ADC_PRESCALER_BITS;
 			while( ADCSRA & (1 << ADSC ) )
 			{
 			}
