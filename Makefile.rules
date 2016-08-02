@@ -1,5 +1,6 @@
 # Set this to the drive you want to build for.
 DRIVER := BLFA6
+#DRIVER := MTN17DDm
 
 # This makefile has the following useful targets:
 # - build (the default) : just build the firmware.
@@ -8,6 +9,9 @@ DRIVER := BLFA6
 # - show_eeprom : get eeprom content from MCU and show it.
 # - verify_fuses : check MCU fuses against values wanted by the firmware.
 # - flash_fuses : flash the MCU fuses to the values wanted by the firmware.
+#
+# BUGS
+# - Include file dependencies are not tracked.
 
 .PHONY: build asm clean flash check_link show_eeprom verify_fuses flash_fuses
 
@@ -29,7 +33,7 @@ build: $(SOURCE:%.c=%.hex)
 asm: $(SOURCE:%.c=%.s)
 
 clean:
-	rm $(SOURCE:%.c=%.elf) $(SOURCE:%.c=%.hex) $(SOURCE:%.c=%.s)
+	rm -f $(SOURCE:%.c=%.elf) $(SOURCE:%.c=%.hex) $(SOURCE:%.c=%.s)
 
 flash: $(SOURCE:%.c=%.hex)
 	avrdude -p $(AVRDUDE_PART) -c usbasp -Uflash:w:$<:i
@@ -44,7 +48,7 @@ show_eeprom:
 
 # Note that these won't program the extended fuse byte of attiny25/45/85.
 verify_fuses: $(SOURCE:%.c=%.elf)
-	avrdude -p t13 -c usbasp -Ulfuse:v:$<:e -Uhfuse:v:$<:e
+	avrdude -p $(AVRDUDE_PART) -c usbasp -Ulfuse:v:$<:e -Uhfuse:v:$<:e
 
 flash_fuses: $(SOURCE:%.c=%.elf)
-	avrdude -p t13 -c usbasp -Ulfuse:w:$<:e -Uhfuse:w:$<:e
+	avrdude -p $(AVRDUDE_PART) -c usbasp -Ulfuse:w:$<:e -Uhfuse:w:$<:e

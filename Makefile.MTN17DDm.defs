@@ -1,0 +1,2 @@
+MCU_NAME := attiny25
+AVRDUDE_PART := t25
