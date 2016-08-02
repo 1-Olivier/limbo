@@ -587,7 +587,7 @@ int main(void)
 				TODO: Use one-way offset if a code word must be saved.
 				TODO: See if this needs to be larger to avoid flicker.
 			*/
-			uint8_t read_level = ADCH;
+			uint8_t read_level = ADCH + ADC8_CELL_DIODE_DROP;
 			uint8_t rp1 = read_level + 1u;
 			uint8_t rm1 = read_level - 1u;
 			uint8_t local_cell_level = cell_level;

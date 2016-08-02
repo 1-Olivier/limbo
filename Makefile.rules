@@ -19,10 +19,10 @@ DRIVER := BLFA6
 include $(dir $(lastword $(MAKEFILE_LIST)))Makefile.$(DRIVER).defs
 
 %.elf: %.c
-	avr-gcc -mmcu=$(MCU_NAME) -Os -o $@ -DDRIVER=$(DRIVER) $<
+	avr-gcc -mmcu=$(MCU_NAME) -Os -o $@ -DDRIVER_$(DRIVER) $<
 
 %.s: %.c
-	avr-gcc -mmcu=$(MCU_NAME) -Os -c -S -o $@ -DDRIVER=$(DRIVER) $<
+	avr-gcc -mmcu=$(MCU_NAME) -Os -c -S -o $@ -DDRIVER_$(DRIVER) $<
 
 %.hex: %.elf
 	avr-size -C --mcu=$(MCU_NAME) $< && \
