@@ -374,9 +374,11 @@ ISR( WDT_vect )
 		local_output_level = user_set_level;
 	}
 
+#ifdef TEMPERATURE_THRESHOLD_LEVEL
 	uint16_t max_level = (uint16_t)USER_LEVEL_MAX - (uint16_t)temp_offset;
 	if( local_output_level > max_level )
 		local_output_level = max_level;
+#endif
 
 	/*
 		If we reach the lower level, just turn the light off. Our sleep
