@@ -82,10 +82,33 @@ uint8_t wdt_count;
 
 /* Output level which the user selected. */
 uint16_t user_set_level __attribute__ ((section (".noinit")));
-#define USER_LEVEL_MIN 120
-#define USER_LEVEL_MAX 450
-/* Level above which temperature control is enabled. Undefine to disable. */
-#define TEMPERATURE_THRESHOLD_LEVEL 180
+
+/*
+	USER_LEVEL_MIN and USER_LEVEL_MAX define the range of the ramp.
+
+	TEMPERATURE_THRESHOLD_LEVEL is the level above which temperature control is
+	enabled. Undefine to disable temperature control completely.
+
+	For the UI to work well, USER_LEVEL_MAX should not be higher than it needs
+	to be to make the step to turbo very small. Otherwise there will be a 'dead
+	range' in the ramp.
+
+	For temperature control to behave well, USER_LEVEL_MAX should also be
+	reasonably close to turbo or MAX_LEVEL_IS_TURBO needs to be undefined.
+	Otherwise the initial step down will be very large. It also needs to be at
+	least 255 or thermal control might cause an underflow.
+*/
+#if defined(DRIVER_BLFA6)
+#	define USER_LEVEL_MIN 120
+#	define USER_LEVEL_MAX 450
+#	define TEMPERATURE_THRESHOLD_LEVEL 180
+#elif defined(DRIVER_MTN17DDm)
+#	define USER_LEVEL_MIN 600
+#	define USER_LEVEL_MAX 1400
+//#	define TEMPERATURE_THRESHOLD_LEVEL 680
+#endif
+
+
 /* When defined, USER_LEVEL_MAX is a turbo (full on). Comment this to use a
    lower max level without turbo (eg. on a light which can't handle turbo). */
 #define MAX_LEVEL_IS_TURBO
