@@ -153,7 +153,7 @@ void apply_output_level( uint16_t level )
 {
 #ifdef MAX_LEVEL_IS_TURBO
 	/* Quick hack to make sure max really is max. */
-	if( level == USER_LEVEL_MAX )
+	if( level >= USER_LEVEL_MAX )
 	{
 		PORTB |= (1 << PORTB1);
 		return;
