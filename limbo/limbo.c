@@ -29,6 +29,7 @@
 #include <avr/io.h>
 #include <avr/eeprom.h>
 #include <avr/interrupt.h>
+#include <avr/pgmspace.h>
 #include <avr/sleep.h>
 #include <util/delay.h>
 
@@ -125,11 +126,25 @@ uint8_t g_state __attribute__ ((section (".noinit")));
 #define STATE_STEADY 1
 #define STATE_RAMP_DOWN 2
 #define STATE_THERMAL_CONFIG 3
+#define STATE_BATTERY_LEVEL 4
 
 /* Last ADC cell voltage readout. */
 volatile uint8_t cell_level;
 #define ADC_CELL_100 ADC8_FROM_CELL_V( 420 )
 #define ADC_CELL_LOWEST ADC8_FROM_CELL_V( 300 )
+
+/*
+	Battery level indicator table. There will be no blinks if the cell is below
+	the first entry, 1 blink if it is above the first entry, 2 blinks if above
+	the second entry, etc.
+*/
+const uint8_t battery_levels[4] PROGMEM =
+{
+	ADC8_FROM_CELL_V( 330 ),
+	ADC8_FROM_CELL_V( 360 ),
+	ADC8_FROM_CELL_V( 380 ),
+	ADC8_FROM_CELL_V( 400 )
+};
 
 /* This sets the initial state on a cold start. */
 #define USER_LEVEL_START (USER_LEVEL_MIN + 30)
@@ -407,6 +422,24 @@ ISR( WDT_vect )
 		local_output_level = max_level;
 #endif
 
+	if( state == STATE_BATTERY_LEVEL )
+	{
+		/*
+			The battery level indicator works by turning off the output
+			selectively to produce 0 to 4 blinks. There are 3 conditions
+			involved below:
+			1) Turns it off for the second half of the cycle.
+			2) Turns it off between blinks.
+			3) Turns it off if cell level is too low to show this blink.
+		*/
+		if( (wdt_count & (1u << 7)) != 0 ||
+		    (wdt_count & (1u << 4)) == 0 ||
+		    cell_level < pgm_read_byte( &battery_levels[wdt_count >> 5] ) )
+		{
+			local_output_level = USER_LEVEL_MIN;
+		}
+	}
+
 	/*
 		If we reach the lower level, just turn the light off. Our sleep
 		mode is already set to power down and interrupts are already
@@ -526,6 +559,10 @@ int main(void)
 		else if( click_count == 2 )
 		{
 			state = STATE_RAMP_DOWN;
+		}
+		else if( click_count == 4 )
+		{
+			state = STATE_BATTERY_LEVEL;
 		}
 		else
 		{

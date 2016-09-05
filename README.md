@@ -29,6 +29,8 @@ This was tested on the BLF A6 driver so will need to change some constants if yo
 ### Interface
 The interface is fairly simple as there are few features. The light turns on at a set level, ramping toward the max level. A single click (power off/on cycle) on the switch will stop any ramp at the current level. A single click while it is not ramping will resume the ramp toward the max level. A double click (two clicks within about 0.3s of each other) will make it ramp toward the lowest level, at half the speed. Turning the light off for more than a few seconds will make it start from its initial state next time.
 
+While the light is on, 4 quick clicks will enable the battery indicator. The light will blink 0-4 times at the previously set output level depending on charge.
+
 The only soft configuration is thermal limit calibration. This is currently always active so it must be calibrated or the light might never go to high levels. If your ramp stops at a very low level, this is why. Calibration is done by a series of quick clicks (8) until the light comes on at maximum output. Let it heat up until it is where you want the limit to be and give it a click. Then turn it off and wait several seconds.
 
 ### Known issues
