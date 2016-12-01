@@ -129,7 +129,7 @@ uint8_t g_state __attribute__ ((section (".noinit")));
 #define STATE_BATTERY_LEVEL 4
 
 /* Last ADC cell voltage readout. */
-volatile uint8_t cell_level;
+volatile uint8_t cell_level __attribute__ ((section (".noinit")));
 #define ADC_CELL_100 ADC8_FROM_CELL_V( 420 )
 #define ADC_CELL_LOWEST ADC8_FROM_CELL_V( 300 )
 
@@ -498,14 +498,6 @@ ISR( WDT_vect )
 
 int main(void)
 {
-	/*
-		Assume largest possible value until we know better. This means the
-		light will be less bright than it should be for the first WDT cycle,
-		which is less visible than being too bright.
-	*/
-#define CELL_INIT_VALUE (ADC_CELL_LOWEST < 128 ? ADC_CELL_LOWEST + 127 : 255)
-	cell_level = CELL_INIT_VALUE;
-
 	/* Drain anything left in the gate from before click. Does not seem really
 	   needed so far. */
 	DDRB |= (1 << DDB1);
@@ -588,6 +580,13 @@ int main(void)
 		g_temperature_limit = temp_limit_config;
 		/* sane temperature value until we get a reading */
 		g_current_temperature = temp_limit_config;
+		/*
+			Assume largest possible value until we know better. This means the
+			light will be less bright than it should be for the first WDT cycle,
+			which is less visible than being too bright.
+		*/
+#define CELL_INIT_VALUE (ADC_CELL_LOWEST < 128 ? ADC_CELL_LOWEST + 127 : 255)
+		cell_level = CELL_INIT_VALUE;
 	}
 
 	g_state = state;
