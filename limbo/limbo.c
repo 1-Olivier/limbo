@@ -109,6 +109,11 @@ uint16_t user_set_level __attribute__ ((section (".noinit")));
 #	define TEMPERATURE_THRESHOLD_LEVEL 680
 #endif
 
+/*
+	Level for battery check and low voltage warning blinks.
+	FIXME: Can't be set much below USER_LEVEL_MIN or it will trigger shutdown.
+*/
+#define USER_LEVEL_BLINK USER_LEVEL_MIN
 
 /* When defined, USER_LEVEL_MAX is a turbo (full on). Comment this to use a
    lower max level without turbo (eg. on a light which can't handle turbo). */
@@ -130,8 +135,12 @@ uint8_t g_state __attribute__ ((section (".noinit")));
 
 /* Last ADC cell voltage readout. */
 volatile uint8_t cell_level __attribute__ ((section (".noinit")));
-#define ADC_CELL_100 ADC8_FROM_CELL_V( 420 )
-#define ADC_CELL_LOWEST ADC8_FROM_CELL_V( 300 )
+
+/* Low voltage warning level. Measured under load. Unit is 10 mV. */
+#define ADC_CELL_WARN ADC8_FROM_CELL_V( 310 )
+
+/* Low voltage protection level. Measured under load. Unit is 10 mV. */
+#define ADC_CELL_LOWEST ADC8_FROM_CELL_V( 270 )
 
 /*
 	Battery level indicator table. There will be no blinks if the cell is below
@@ -447,22 +456,24 @@ ISR( WDT_vect )
 		local_output_level = max_level;
 #endif
 
-	if( state == STATE_BATTERY_LEVEL )
+	/*
+		The battery level indicator works by turning off the output
+		selectively to produce 0 to 4 blinks. There are 3 conditions
+		involved below:
+		1) Turns it off for the second half of the cycle.
+		2) Turns it off between blinks.
+		3) Turns it off if cell level is too low to show this blink.
+
+		This big condition also includes the low voltage warning which is:
+		4) Turn if off 0.1s every 4s if below WARN cell level.
+	*/
+	if( ( state == STATE_BATTERY_LEVEL &&
+	      ( (wdt_count & (1u << 7)) != 0 ||
+	        (wdt_count & (1u << 4)) == 0 ||
+	        cell_level < pgm_read_byte( &battery_levels[wdt_count >> 5] ) ) ) ||
+		( cell_level < ADC_CELL_WARN && wdt_count < 6 ) )
 	{
-		/*
-			The battery level indicator works by turning off the output
-			selectively to produce 0 to 4 blinks. There are 3 conditions
-			involved below:
-			1) Turns it off for the second half of the cycle.
-			2) Turns it off between blinks.
-			3) Turns it off if cell level is too low to show this blink.
-		*/
-		if( (wdt_count & (1u << 7)) != 0 ||
-		    (wdt_count & (1u << 4)) == 0 ||
-		    cell_level < pgm_read_byte( &battery_levels[wdt_count >> 5] ) )
-		{
-			local_output_level = USER_LEVEL_MIN;
-		}
+		local_output_level = USER_LEVEL_BLINK;
 	}
 
 	/*
