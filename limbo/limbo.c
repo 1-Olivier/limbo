@@ -106,7 +106,7 @@ uint16_t user_set_level __attribute__ ((section (".noinit")));
 #elif defined(DRIVER_MTN17DDm)
 #	define USER_LEVEL_MIN 600
 #	define USER_LEVEL_MAX 1400
-//#	define TEMPERATURE_THRESHOLD_LEVEL 680
+#	define TEMPERATURE_THRESHOLD_LEVEL 680
 #endif
 
 
@@ -350,7 +350,16 @@ ISR( WDT_vect )
 		around, use the temperature readout.
 	*/
 #ifdef TEMPERATURE_THRESHOLD_LEVEL
+#if defined(__AVR_ATtiny13A__)
+	/*
+		This needs to be 8-bit on attiny13a or the firmware will be too big. It
+		limits how much temperature control can step down the light, which
+		could be a problem with some FETs needing large charge values.
+	 */
 	uint8_t temp_offset = 0;
+#else
+	uint16_t temp_offset = 0;
+#endif
 	if( local_output_level >= TEMPERATURE_THRESHOLD_LEVEL )
 	{
 		/*
@@ -395,6 +404,7 @@ ISR( WDT_vect )
 				if( uover > 25 )
 					uover = 25;
 
+#if defined(__AVR_ATtiny13A__)
 				temp_offset = uover << 3;
 				if( uover > 6 )
 					uover = 6;
@@ -404,7 +414,22 @@ ISR( WDT_vect )
 					variable to go larger but there's no point with the current
 					level range. USER_LEVEL_MAX - 248 is too low to generate a
 					lot of heat.
+
+					The check below ensures temp_offset will never drop output
+					level below where temperature monitoring is active. This
+					would cause incorrect behavior.
 				*/
+#				if (USER_LEVEL_MAX - 255) < TEMPERATURE_THRESHOLD_LEVEL
+#				error temperature threshold too high
+#				endif
+#else
+				/* ATtiny25 (and larger) version. We have enough code space to
+				   use a proper 16-bit temp_offset. */
+				temp_offset = (uint16_t)uover << 5;
+				if( uover > 6 )
+					uover = 6;
+				temp_offset += (uint16_t)uover << 5;
+#endif
 			}
 		}
 	}
