@@ -1,4 +1,4 @@
-# Set this to the drive you want to build for.
+# Set this to the driver you want to build for.
 DRIVER := BLFA6
 #DRIVER := MTN17DDm
 
@@ -18,11 +18,13 @@ DRIVER := BLFA6
 # Include driver makefile definitions from same directory as this Makefile
 include $(dir $(lastword $(MAKEFILE_LIST)))Makefile.$(DRIVER).defs
 
+CFLAGS := -Os
+
 %.elf: %.c
-	avr-gcc -mmcu=$(MCU_NAME) -Os -o $@ -DDRIVER_$(DRIVER) $<
+	avr-gcc -mmcu=$(MCU_NAME) $(CFLAGS) -o $@ -DDRIVER_$(DRIVER) $<
 
 %.s: %.c
-	avr-gcc -mmcu=$(MCU_NAME) -Os -c -S -o $@ -DDRIVER_$(DRIVER) $<
+	avr-gcc -mmcu=$(MCU_NAME) $(CFLAGS) -c -S -o $@ -DDRIVER_$(DRIVER) $<
 
 %.hex: %.elf
 	avr-size -C --mcu=$(MCU_NAME) $< && \
@@ -52,3 +54,9 @@ verify_fuses: $(SOURCE:%.c=%.elf)
 
 flash_fuses: $(SOURCE:%.c=%.elf)
 	avrdude -p $(AVRDUDE_PART) -c usbasp -Ulfuse:w:$<:e -Uhfuse:w:$<:e
+
+read_eeprom:
+	avrdude -p $(AVRDUDE_PART) -c usbasp -Ueeprom:r:eeprom-dump.hex:r
+
+write_eeprom:
+	avrdude -p $(AVRDUDE_PART) -c usbasp -Ueeprom:w:eeprom-dump.hex:r
