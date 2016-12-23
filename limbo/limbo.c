@@ -111,9 +111,9 @@ uint16_t user_set_level __attribute__ ((section (".noinit")));
 
 /*
 	Level for battery check and low voltage warning blinks.
-	FIXME: Can't be set much below USER_LEVEL_MIN or it will trigger shutdown.
+	Don't set this below 12 or there will be underflow in apply_output_level().
 */
-#define USER_LEVEL_BLINK USER_LEVEL_MIN
+#define USER_LEVEL_BLINK 20
 
 /* When defined, USER_LEVEL_MAX is a turbo (full on). Comment this to use a
    lower max level without turbo (eg. on a light which can't handle turbo). */
@@ -457,26 +457,6 @@ ISR( WDT_vect )
 #endif
 
 	/*
-		The battery level indicator works by turning off the output
-		selectively to produce 0 to 4 blinks. There are 3 conditions
-		involved below:
-		1) Turns it off for the second half of the cycle.
-		2) Turns it off between blinks.
-		3) Turns it off if cell level is too low to show this blink.
-
-		This big condition also includes the low voltage warning which is:
-		4) Turn if off 0.1s every 4s if below WARN cell level.
-	*/
-	if( ( state == STATE_BATTERY_LEVEL &&
-	      ( (wdt_count & (1u << 7)) != 0 ||
-	        (wdt_count & (1u << 4)) == 0 ||
-	        cell_level < pgm_read_byte( &battery_levels[wdt_count >> 5] ) ) ) ||
-		( cell_level < ADC_CELL_WARN && wdt_count < 6 ) )
-	{
-		local_output_level = USER_LEVEL_BLINK;
-	}
-
-	/*
 		If we reach the lower level, just turn the light off. Our sleep
 		mode is already set to power down and interrupts are already
 		disabled because we're in an interrupt handler. So we just disable
@@ -517,6 +497,34 @@ ISR( WDT_vect )
 #endif
 	{
 		set_sleep_mode( SLEEP_MODE_PWR_DOWN );
+	}
+
+	/*
+		The battery level indicator works by turning off the output
+		selectively to produce 0 to 4 blinks. There are 3 conditions
+		involved below:
+		1) Turns it off for the second half of the cycle.
+		2) Turns it off between blinks.
+		3) Turns it off if cell level is too low to show this blink.
+
+		This big condition also includes the low voltage warning which is:
+		4) Turn if off 0.1s every 4s if below WARN cell level.
+
+		Note that this is done after local_output_level is written back to
+		output_level so it does not affect it. Otherwise, the end of blink will
+		be slow to turn back on because max_increase might be fairly small.
+
+		It is also important to keep it after the code which shuts down the
+		light when level gets below min (which indicates ADC_CELL_LOWEST has
+		been reached).
+	*/
+	if( ( state == STATE_BATTERY_LEVEL &&
+	      ( (wdt_count & (1u << 7)) != 0 ||
+	        (wdt_count & (1u << 4)) == 0 ||
+	        cell_level < pgm_read_byte( &battery_levels[wdt_count >> 5] ) ) ) ||
+		( cell_level < ADC_CELL_WARN && wdt_count < 6 ) )
+	{
+		local_output_level = USER_LEVEL_BLINK;
 	}
 
 	/* Set new light value. */
