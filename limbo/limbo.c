@@ -120,6 +120,12 @@ uint16_t user_set_level __attribute__ ((section (".noinit")));
 #define MAX_LEVEL_IS_TURBO
 
 /*
+	If this is defined, the temperature limit is hardcoded. This can be used
+	after it has been configured and read from eeprom to reduce code size.
+*/
+//#define FIXED_TEMPERATURE_LIMIT 0x53
+
+/*
 	Output level we're actually using, after taking into account low voltage
 	protection, temperature control, etc.
 */
@@ -162,7 +168,9 @@ const uint8_t battery_levels[4] PROGMEM =
 /* 0 = no, 1 = start */
 uint8_t do_power_adc;
 
+#ifndef FIXED_TEMPERATURE_LIMIT
 volatile uint8_t g_temperature_limit __attribute__ ((section (".noinit")));
+#endif
 volatile uint8_t g_current_temperature __attribute__ ((section (".noinit")));
 int8_t g_temperature_window_low;
 int8_t g_temperature_window_high;
@@ -378,7 +386,11 @@ ISR( WDT_vect )
 		*/
 		uint8_t current_temp = g_current_temperature;
 		int8_t d_temp = temperature - current_temp;
+#ifdef FIXED_TEMPERATURE_LIMIT
+		uint8_t temperature_limit = FIXED_TEMPERATURE_LIMIT;
+#else
 		uint8_t temperature_limit = g_temperature_limit;
+#endif
 		if( d_temp > g_temperature_window_high )
 		{
 			++current_temp;
@@ -388,8 +400,11 @@ ISR( WDT_vect )
 				a huge amount from cold to hot. Also do not do it while in
 				thermal config mode or the recorded reading will be wrong.
 			*/
-			if( state != STATE_THERMAL_CONFIG &&
-			    (int8_t)(current_temp - temperature_limit) > 0 )
+			if(
+#ifndef FIXED_TEMPERATURE_LIMIT
+				state != STATE_THERMAL_CONFIG &&
+#endif
+				(int8_t)(current_temp - temperature_limit) > 0 )
 			{
 				++g_temperature_window_high;
 			}
@@ -404,7 +419,9 @@ ISR( WDT_vect )
 		}
 		g_current_temperature = current_temp;
 
+#ifndef FIXED_TEMPERATURE_LIMIT
 		if( state != STATE_THERMAL_CONFIG )
+#endif
 		{
 			int8_t temp_overshoot = current_temp - temperature_limit;
 			if( temp_overshoot > 0 )
@@ -584,6 +601,7 @@ int main(void)
 				state = STATE_STEADY;
 			else if( state == STATE_STEADY )
 				state = STATE_RAMP_UP;
+#ifndef FIXED_TEMPERATURE_LIMIT
 			else if( state == STATE_THERMAL_CONFIG )
 			{
 				/* store current temperature as limit in eeprom */
@@ -591,6 +609,7 @@ int main(void)
 					(uint8_t*)TEMPERATURE_CONFIG_ADDRESS,
 					g_current_temperature );
 			}
+#endif
 		}
 		else if( click_count == 2 )
 		{
@@ -604,11 +623,13 @@ int main(void)
 		{
 			state = STATE_STEADY;
 
+#ifndef FIXED_TEMPERATURE_LIMIT
 			if( click_count > 8 )
 			{
 				state = STATE_THERMAL_CONFIG;
 				user_set_level = USER_LEVEL_MAX;
 			}
+#endif
 		}
 	}
 	else
@@ -619,11 +640,15 @@ int main(void)
 		state = START_STATE;
 		click_count = 0;
 		/* read some config from eeprom */
+#ifndef FIXED_TEMPERATURE_LIMIT
 		uint8_t temp_limit_config = eeprom_read_byte(
 			(uint8_t*)TEMPERATURE_CONFIG_ADDRESS );
 		g_temperature_limit = temp_limit_config;
 		/* sane temperature value until we get a reading */
 		g_current_temperature = temp_limit_config;
+#else
+		g_current_temperature = FIXED_TEMPERATURE_LIMIT;
+#endif
 		/*
 			Assume largest possible value until we know better. This means the
 			light will be less bright than it should be for the first WDT cycle,
