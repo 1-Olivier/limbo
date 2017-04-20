@@ -109,6 +109,9 @@ uint16_t user_set_level __attribute__ ((section (".noinit")));
 #	define TEMPERATURE_THRESHOLD_LEVEL 680
 #endif
 
+/* Define to have a fixed list of modes instead of ramping. */
+//#define USER_MODES 270,430,190
+
 /*
 	Level for battery check and low voltage warning blinks.
 	Don't set this below 12 or there will be underflow in apply_output_level().
@@ -177,6 +180,10 @@ int8_t g_temperature_window_high;
 #define TEMPERATURE_WINDOW_ADJUST_DELAY 8
 uint8_t g_seconds_until_window_adjust = 0;
 #define TEMPERATURE_CONFIG_ADDRESS 1
+
+#ifdef USER_MODES
+const uint16_t modes[] PROGMEM = { USER_MODES };
+#endif
 
 static void empty_gate()
 {
@@ -581,12 +588,14 @@ int main(void)
 	/* also to make sure it doesn't produce crap */
 	DDRB |= (1 << DDB0);
 
+#ifndef USER_MODES
 	/* Click starts from the actual output level (limited by temp or Vcc). */
 	user_set_level = output_level;
 
 	/* Safety. Should be removed eventually. */
 	if( user_set_level >= USER_LEVEL_MAX )
 		user_set_level = USER_LEVEL_MAX;
+#endif
 
 	uint8_t state = g_state;
 
@@ -595,6 +604,23 @@ int main(void)
 		/* short press */
 		++click_count;
 
+#ifdef USER_MODES
+		if( click_count == 1 )
+		{
+			/* Next mode. */
+			uint8_t i = 0;
+			while( pgm_read_word( &modes[i] ) != user_set_level )
+				++i;
+
+			if( i + 1 == sizeof(modes) / sizeof(modes[0]) )
+				i = 0;
+			else
+				++i;
+
+			user_set_level = pgm_read_word( &modes[i] );
+			state = STATE_STEADY;
+		}
+#else
 		if( click_count == 1 )
 		{
 			if( state == STATE_RAMP_UP || state == STATE_RAMP_DOWN )
@@ -615,6 +641,7 @@ int main(void)
 		{
 			state = STATE_RAMP_DOWN;
 		}
+#endif
 		else if( click_count == 4 )
 		{
 			state = STATE_BATTERY_LEVEL;
@@ -636,8 +663,13 @@ int main(void)
 	{
 		/* cold start */
 		mem_check = 0x55;
+#ifdef USER_MODES
+		user_set_level = pgm_read_word( &modes[0] );
+		state = STATE_STEADY;
+#else
 		user_set_level = USER_LEVEL_START;
 		state = START_STATE;
+#endif
 		click_count = 0;
 		/* read some config from eeprom */
 #ifndef FIXED_TEMPERATURE_LIMIT
