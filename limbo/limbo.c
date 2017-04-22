@@ -458,10 +458,10 @@ ISR( WDT_vect )
 #else
 				/* ATtiny25 (and larger) version. We have enough code space to
 				   use a proper 16-bit temp_offset. */
-				temp_offset = (uint16_t)uover << 5;
+				temp_offset = (uint16_t)uover << 4;
 				if( uover > 6 )
 					uover = 6;
-				temp_offset += (uint16_t)uover << 5;
+				temp_offset += (uint16_t)uover << 4;
 #endif
 			}
 		}
