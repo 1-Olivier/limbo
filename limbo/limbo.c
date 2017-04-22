@@ -122,6 +122,10 @@ uint16_t user_set_level __attribute__ ((section (".noinit")));
    lower max level without turbo (eg. on a light which can't handle turbo). */
 #define MAX_LEVEL_IS_TURBO
 
+/* Level used by discharge mode. Halfway between min and max by default. */
+#define USER_LEVEL_DISCHARGE \
+	(USER_LEVEL_MIN + (USER_LEVEL_MAX - USER_LEVEL_MIN) / 2)
+
 /*
 	If this is defined, the temperature limit is hardcoded. This can be used
 	after it has been configured and read from eeprom to reduce code size.
@@ -141,6 +145,7 @@ uint8_t g_state __attribute__ ((section (".noinit")));
 #define STATE_RAMP_DOWN 2
 #define STATE_THERMAL_CONFIG 3
 #define STATE_BATTERY_LEVEL 4
+#define STATE_DISCHARGE 5
 
 /* Last ADC cell voltage readout. */
 volatile uint8_t cell_level __attribute__ ((section (".noinit")));
@@ -150,6 +155,14 @@ volatile uint8_t cell_level __attribute__ ((section (".noinit")));
 
 /* Low voltage protection level. Measured under load. Unit is 10 mV. */
 #define ADC_CELL_LOWEST ADC8_FROM_CELL_V( 270 )
+
+/*
+	Cell level to discharge to in discharge mode. Leave undefined if you don't
+	want discharge mode.
+*/
+#if !defined(__AVR_ATtiny13A__)
+#define ADC_CELL_DISCHARGE ADC8_FROM_CELL_V( 375 )
+#endif
 
 /*
 	Battery level indicator table. There will be no blinks if the cell is below
@@ -366,6 +379,12 @@ ISR( WDT_vect )
 		the ADC readout. This is enough to prevent oscillation.
 	*/
 	int8_t max_increase = cell_level - ADC_CELL_LOWEST;
+#ifdef ADC_CELL_DISCHARGE
+	if( state == STATE_DISCHARGE )
+	{
+		max_increase = cell_level - ADC_CELL_DISCHARGE;
+	}
+#endif
 
 	uint16_t local_output_level = output_level;
 
@@ -646,6 +665,13 @@ int main(void)
 		{
 			state = STATE_BATTERY_LEVEL;
 		}
+#ifdef ADC_CELL_DISCHARGE
+		else if( click_count == 5 )
+		{
+			state = STATE_DISCHARGE;
+			user_set_level = USER_LEVEL_DISCHARGE;
+		}
+#endif
 		else
 		{
 			state = STATE_STEADY;

@@ -33,5 +33,7 @@ While the light is on, 4 quick clicks will enable the battery indicator. The lig
 
 The only soft configuration is thermal limit calibration. This is currently always active so it must be calibrated or the light might never go to high levels. If your ramp stops at a very low level, this is why. Calibration is done by a series of quick clicks (8) until the light comes on at maximum output. Let it heat up until it is where you want the limit to be and give it a click. Then turn it off and wait several seconds.
 
+When the light is on, 5 quick clicks will enable discharge mode. The light will stay on until the cell is discharged to 3.75V which is about 50% charge and generally suitable for long term storage.
+
 ### Known issues
 * The output flickers a little. It's not visible when moved around but you might see it if you shine the light at a white wall or ceiling bounce it, especially at low output levels. This makes the firmware not that great as a reading light if you're sensitive to such things. I suspect either clock jitter or some randomness in the FET to be the cause. Hopefully the former as that might be improved on an attiny25.
