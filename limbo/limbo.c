@@ -642,10 +642,14 @@ int main(void)
 #else
 		if( click_count == 1 )
 		{
-			if( state == STATE_RAMP_UP || state == STATE_RAMP_DOWN )
-				state = STATE_STEADY;
-			else if( state == STATE_STEADY )
+			if( state == STATE_STEADY
+#ifdef ADC_CELL_DISCHARGE
+			    || state == STATE_DISCHARGE
+#endif
+				)
+			{
 				state = STATE_RAMP_UP;
+			}
 #ifndef FIXED_TEMPERATURE_LIMIT
 			else if( state == STATE_THERMAL_CONFIG )
 			{
@@ -655,6 +659,11 @@ int main(void)
 					g_current_temperature );
 			}
 #endif
+			else
+			{
+				/* From either ramping state or battery check state. */
+				state = STATE_STEADY;
+			}
 		}
 		else if( click_count == 2 )
 		{
